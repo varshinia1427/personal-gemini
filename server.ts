@@ -7,8 +7,10 @@ import {
   translateJournalEntry,
   transcribeVoiceAudio,
   generateSynthesizedInsights,
+  generateStoryForAgeGroup,
+  askGeminiAboutJournal,
 } from './server/gemini';
-import type { MoodType } from './src/types';
+import type { AgeGroup, MoodType } from './src/types';
 
 dotenv.config();
 
@@ -46,14 +48,30 @@ function requireAuth(req: Request, res: Response, next: () => void) {
 // ==========================================
 app.post('/api/reflect', requireAuth, async (req: Request, res: Response) => {
   try {
-    const { title, content, mood, language, languageName, voiceTranscription, images, drawing, isKidsMode } = req.body;
+    const {
+      title,
+      content,
+      mood,
+      language,
+      languageName,
+      voiceTranscription,
+      images,
+      drawing,
+      isKidsMode,
+      ageGroup,
+      schoolReflection,
+      personalGrowth,
+      dailyQuestion,
+      dailyQuestionAnswer,
+    } = req.body;
 
     const hasText = Boolean(content && typeof content === 'string' && content.trim().length >= 2);
     const hasVoice = Boolean(voiceTranscription && typeof voiceTranscription === 'string' && voiceTranscription.trim().length >= 2);
     const hasDrawing = Boolean(drawing && typeof drawing === 'string' && drawing.startsWith('data:image/'));
     const hasImages = Array.isArray(images) && images.length > 0;
+    const hasDailyQuestion = Boolean(dailyQuestionAnswer && dailyQuestionAnswer.trim().length >= 2);
 
-    if (!hasText && !hasVoice && !hasDrawing && !hasImages) {
+    if (!hasText && !hasVoice && !hasDrawing && !hasImages && !hasDailyQuestion) {
       res.status(400).json({ error: 'Please provide some text, voice recording, drawing, or photo before requesting an AI reflection.' });
       return;
     }
@@ -71,6 +89,11 @@ app.post('/api/reflect', requireAuth, async (req: Request, res: Response) => {
       images: Array.isArray(images) ? images : [],
       drawing: drawing || undefined,
       isKidsMode: Boolean(isKidsMode),
+      ageGroup: (ageGroup as AgeGroup) || (isKidsMode ? '3-6' : '18+'),
+      schoolReflection,
+      personalGrowth,
+      dailyQuestion,
+      dailyQuestionAnswer,
     });
 
     res.json({ reflection });
@@ -148,6 +171,55 @@ app.post('/api/insights', requireAuth, async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('Insights route error:', err);
     res.status(500).json({ error: 'Failed to generate insights.' });
+  }
+});
+
+// ==========================================
+// STORY CORNER GENERATION
+// ==========================================
+app.post('/api/story', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { ageGroup, genre, prompt, language, languageName } = req.body;
+
+    const story = await generateStoryForAgeGroup({
+      ageGroup: (ageGroup as AgeGroup) || '7-12',
+      genre: genre || 'Adventure',
+      prompt: prompt || '',
+      language: language || 'en',
+      languageName: languageName || 'English',
+    });
+
+    res.json({ story });
+  } catch (err: any) {
+    console.error('Story route error:', err);
+    res.status(500).json({ error: 'Failed to generate story.' });
+  }
+});
+
+// ==========================================
+// ASK GEMINI ABOUT MY JOURNAL (CONVERSATIONAL Q&A)
+// ==========================================
+app.post('/api/ask-gemini', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { question, entriesSummary, languageName, language, ageGroup } = req.body;
+
+    if (!question || typeof question !== 'string' || !question.trim()) {
+      res.status(400).json({ error: 'Please provide a question.' });
+      return;
+    }
+
+    const result = await askGeminiAboutJournal({
+      question: question.trim(),
+      entriesSummary: Array.isArray(entriesSummary) ? entriesSummary : [],
+      languageName: languageName || 'English',
+      language: language || 'en',
+      ageGroup: (ageGroup as AgeGroup) || '18+',
+    });
+
+    res.json(result);
+  } catch (err: any) {
+    console.error('Ask Gemini route error:', err);
+    res.status(500).json({ error: 'Failed to answer question.' });
   }
 });
 

@@ -12,6 +12,7 @@ import {
   type User as FirebaseUser,
 } from 'firebase/auth';
 import {
+  initializeFirestore,
   getFirestore,
   collection,
   doc,
@@ -25,7 +26,9 @@ import {
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import type {
+  AgeGroup,
   DashboardStats,
+  GoalItem,
   JournalEntry,
   JournalImage,
   LanguageCode,
@@ -47,16 +50,37 @@ googleProvider.setCustomParameters({
   prompt: 'select_account',
 });
 
-// Initialize Firestore with custom databaseId if configured
-export const db = firebaseConfig.firestoreDatabaseId
-  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-  : getFirestore(app);
+// Initialize Firestore with long-polling transport enabled
+// to eliminate streaming connection timeouts behind reverse proxies and sandboxed iframes.
+export const db = (() => {
+  try {
+    return firebaseConfig.firestoreDatabaseId
+      ? initializeFirestore(
+          app,
+          {
+            experimentalForceLongPolling: true,
+          },
+          firebaseConfig.firestoreDatabaseId
+        )
+      : initializeFirestore(app, {
+          experimentalForceLongPolling: true,
+        });
+  } catch (_err) {
+    return firebaseConfig.firestoreDatabaseId
+      ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+      : getFirestore(app);
+  }
+})();
 
 // Connectivity validation per Firebase integration guidelines
 async function testConnection() {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
+  } catch (error: any) {
+    // If backend returns permission-denied, server connection is verified and operational
+    if (error?.code === 'permission-denied') {
+      return;
+    }
     if (error instanceof Error && error.message.includes('the client is offline')) {
       console.error('Please check your Firebase configuration.');
     }
@@ -65,13 +89,77 @@ async function testConnection() {
 testConnection();
 
 // Map Firebase User to App User interface
-export function mapFirebaseUser(fbUser: FirebaseUser): User {
+export function mapFirebaseUser(fbUser: FirebaseUser, extraProfile?: Partial<User>): User {
   return {
     id: fbUser.uid,
     email: fbUser.email || '',
-    name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Journaler',
-    created_at: fbUser.metadata.creationTime || new Date().toISOString(),
+    name: extraProfile?.name || fbUser.displayName || fbUser.email?.split('@')[0] || 'Journaler',
+    created_at: extraProfile?.created_at || fbUser.metadata.creationTime || new Date().toISOString(),
+    ageGroup: extraProfile?.ageGroup,
+    preferredLanguage: extraProfile?.preferredLanguage,
+    goals: extraProfile?.goals || [],
   };
+}
+
+// ----------------------------------------------------
+// USER PROFILE METHODS (FIRESTORE)
+// ----------------------------------------------------
+
+export async function fetchUserProfile(userId: string): Promise<User | null> {
+  try {
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    if (userDoc.exists()) {
+      const data = userDoc.data();
+      return {
+        id: userId,
+        email: data.email || auth.currentUser?.email || '',
+        name: data.name || auth.currentUser?.displayName || 'Journaler',
+        created_at: data.created_at || new Date().toISOString(),
+        ageGroup: data.ageGroup as AgeGroup | undefined,
+        preferredLanguage: data.preferredLanguage as LanguageCode | undefined,
+        goals: Array.isArray(data.goals) ? data.goals : [],
+      };
+    }
+  } catch (err) {
+    console.warn('Could not fetch user profile from Firestore:', err);
+  }
+  return null;
+}
+
+export async function updateUserAgeGroup(userId: string, ageGroup: AgeGroup): Promise<void> {
+  await setDoc(
+    doc(db, 'users', userId),
+    {
+      id: userId,
+      ageGroup,
+      updated_at: new Date().toISOString(),
+    },
+    { merge: true }
+  );
+}
+
+export async function updateUserLanguage(userId: string, language: LanguageCode): Promise<void> {
+  await setDoc(
+    doc(db, 'users', userId),
+    {
+      id: userId,
+      preferredLanguage: language,
+      updated_at: new Date().toISOString(),
+    },
+    { merge: true }
+  );
+}
+
+export async function updateUserGoals(userId: string, goals: GoalItem[]): Promise<void> {
+  await setDoc(
+    doc(db, 'users', userId),
+    {
+      id: userId,
+      goals,
+      updated_at: new Date().toISOString(),
+    },
+    { merge: true }
+  );
 }
 
 // ----------------------------------------------------
@@ -80,7 +168,8 @@ export function mapFirebaseUser(fbUser: FirebaseUser): User {
 
 export async function loginWithGoogle(): Promise<User> {
   const result = await signInWithPopup(auth, googleProvider);
-  const user = mapFirebaseUser(result.user);
+  const existingProfile = await fetchUserProfile(result.user.uid);
+  const user = mapFirebaseUser(result.user, existingProfile || undefined);
   await setDoc(
     doc(db, 'users', user.id),
     {
@@ -96,7 +185,8 @@ export async function loginWithGoogle(): Promise<User> {
 
 export async function loginWithEmail(email: string, passwordPlain: string): Promise<User> {
   const credential = await signInWithEmailAndPassword(auth, email, passwordPlain);
-  const user = mapFirebaseUser(credential.user);
+  const existingProfile = await fetchUserProfile(credential.user.uid);
+  const user = mapFirebaseUser(credential.user, existingProfile || undefined);
   await setDoc(
     doc(db, 'users', user.id),
     {
@@ -142,9 +232,14 @@ export async function changeUserPassword(newPasswordPlain: string): Promise<void
 }
 
 export function subscribeToAuth(callback: (user: User | null) => void) {
-  return onAuthStateChanged(auth, (fbUser) => {
+  return onAuthStateChanged(auth, async (fbUser) => {
     if (fbUser) {
-      callback(mapFirebaseUser(fbUser));
+      try {
+        const profile = await fetchUserProfile(fbUser.uid);
+        callback(mapFirebaseUser(fbUser, profile || undefined));
+      } catch {
+        callback(mapFirebaseUser(fbUser));
+      }
     } else {
       callback(null);
     }
@@ -180,10 +275,16 @@ export async function fetchUserEntries(
       is_draft: Boolean(data.is_draft),
       language: (data.language as LanguageCode) || 'en',
       mode: data.mode || 'personal',
+      ageGroup: data.ageGroup as AgeGroup | undefined,
       drawing: data.drawing || null,
       images: Array.isArray(data.images) ? data.images : [],
       voiceRecording: data.voiceRecording || null,
       reflection: data.reflection || null,
+      schoolReflection: data.schoolReflection || undefined,
+      personalGrowth: data.personalGrowth || undefined,
+      dailyQuestion: data.dailyQuestion || undefined,
+      dailyQuestionAnswer: data.dailyQuestionAnswer || undefined,
+      tags: Array.isArray(data.tags) ? data.tags : [],
       created_at: data.created_at || new Date().toISOString(),
       updated_at: data.updated_at || new Date().toISOString(),
     });
@@ -215,6 +316,7 @@ export async function fetchUserEntries(
       (e) =>
         e.title.toLowerCase().includes(q) ||
         e.content.toLowerCase().includes(q) ||
+        (e.dailyQuestionAnswer && e.dailyQuestionAnswer.toLowerCase().includes(q)) ||
         (e.voiceRecording?.transcription && e.voiceRecording.transcription.toLowerCase().includes(q))
     );
   }
@@ -237,10 +339,16 @@ export async function fetchUserEntryById(userId: string, entryId: string): Promi
     is_draft: Boolean(data.is_draft),
     language: (data.language as LanguageCode) || 'en',
     mode: data.mode || 'personal',
+    ageGroup: data.ageGroup as AgeGroup | undefined,
     drawing: data.drawing || null,
     images: Array.isArray(data.images) ? data.images : [],
     voiceRecording: data.voiceRecording || null,
     reflection: data.reflection || null,
+    schoolReflection: data.schoolReflection || undefined,
+    personalGrowth: data.personalGrowth || undefined,
+    dailyQuestion: data.dailyQuestion || undefined,
+    dailyQuestionAnswer: data.dailyQuestionAnswer || undefined,
+    tags: Array.isArray(data.tags) ? data.tags : [],
     created_at: data.created_at || new Date().toISOString(),
     updated_at: data.updated_at || new Date().toISOString(),
   };
@@ -254,12 +362,18 @@ export async function saveUserEntry(
     mood: MoodType;
     language?: LanguageCode;
     mode?: 'personal' | 'kids';
+    ageGroup?: AgeGroup;
     drawing?: string | null;
     images?: JournalImage[];
     voiceRecording?: VoiceRecording | null;
     is_draft?: boolean;
     created_at?: string;
     reflection?: ReflectionData | null;
+    schoolReflection?: string;
+    personalGrowth?: string;
+    dailyQuestion?: string;
+    dailyQuestionAnswer?: string;
+    tags?: string[];
   }
 ): Promise<JournalEntry> {
   const entriesRef = collection(db, 'users', userId, 'entries');
@@ -274,6 +388,7 @@ export async function saveUserEntry(
     mood: data.mood,
     language: data.language || 'en',
     mode: data.mode || 'personal',
+    ageGroup: data.ageGroup,
     drawing: data.drawing || null,
     images: data.images || [],
     voiceRecording: data.voiceRecording || null,
@@ -281,6 +396,11 @@ export async function saveUserEntry(
     created_at: entryCreatedAt,
     updated_at: now,
     reflection: data.reflection || null,
+    schoolReflection: data.schoolReflection,
+    personalGrowth: data.personalGrowth,
+    dailyQuestion: data.dailyQuestion,
+    dailyQuestionAnswer: data.dailyQuestionAnswer,
+    tags: data.tags || [],
   };
 
   await setDoc(newDocRef, entryData);

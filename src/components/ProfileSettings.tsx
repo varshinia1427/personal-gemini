@@ -10,22 +10,49 @@ import {
   CheckCircle2, 
   AlertCircle,
   Sparkles,
-  Database
+  Database,
+  Globe,
+  Compass,
+  Check
 } from 'lucide-react';
-import { apiUpdatePassword, apiClearUserData, apiGetEntries } from '../services/api';
-import type { User } from '../types';
+import { 
+  apiUpdatePassword, 
+  apiClearUserData, 
+  apiGetEntries,
+  apiUpdateUserAgeGroup,
+  apiUpdateUserLanguage
+} from '../services/api';
+import type { User, AgeGroup, LanguageCode } from '../types';
+import { SUPPORTED_LANGUAGES } from '../utils/languages';
+import { AGE_GROUP_CONFIGS } from '../utils/ageGroups';
 
 interface ProfileSettingsProps {
   user: User | null;
   onLogout: () => void;
   onEntriesCleared: () => void;
+  currentAgeGroup?: AgeGroup;
+  currentLanguage?: LanguageCode;
+  onUpdateAgeGroup?: (ageGroup: AgeGroup) => Promise<void>;
+  onUpdateLanguage?: (language: LanguageCode) => Promise<void>;
 }
 
 export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
   user,
   onLogout,
   onEntriesCleared,
+  currentAgeGroup = '18+',
+  currentLanguage = 'en',
+  onUpdateAgeGroup,
+  onUpdateLanguage,
 }) => {
+  // Age group & language states
+  const [selectedAge, setSelectedAge] = useState<AgeGroup>(user?.ageGroup || currentAgeGroup);
+  const [selectedLang, setSelectedLang] = useState<LanguageCode>(user?.preferredLanguage || currentLanguage);
+  const [ageStatus, setAgeStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isUpdatingAge, setIsUpdatingAge] = useState(false);
+  const [langStatus, setLangStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isUpdatingLang, setIsUpdatingLang] = useState(false);
+
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -40,6 +67,44 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
 
   // Export state
   const [isExporting, setIsExporting] = useState(false);
+
+  const handleSaveAgeGroup = async (group: AgeGroup) => {
+    setSelectedAge(group);
+    setIsUpdatingAge(true);
+    setAgeStatus(null);
+    try {
+      if (onUpdateAgeGroup) {
+        await onUpdateAgeGroup(group);
+      } else {
+        await apiUpdateUserAgeGroup(group);
+      }
+      setAgeStatus({ type: 'success', message: `Age group updated to ${AGE_GROUP_CONFIGS[group].title}. Dashboard personalized!` });
+    } catch (err: any) {
+      console.error('Failed to update age group:', err);
+      setAgeStatus({ type: 'error', message: err.message || 'Failed to update age group.' });
+    } finally {
+      setIsUpdatingAge(false);
+    }
+  };
+
+  const handleSaveLanguage = async (lang: LanguageCode) => {
+    setSelectedLang(lang);
+    setIsUpdatingLang(true);
+    setLangStatus(null);
+    try {
+      if (onUpdateLanguage) {
+        await onUpdateLanguage(lang);
+      } else {
+        await apiUpdateUserLanguage(lang);
+      }
+      setLangStatus({ type: 'success', message: 'Language preference saved.' });
+    } catch (err: any) {
+      console.error('Failed to update language:', err);
+      setLangStatus({ type: 'error', message: err.message || 'Failed to update language.' });
+    } finally {
+      setIsUpdatingLang(false);
+    }
+  };
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -193,7 +258,133 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
         </div>
       </div>
 
-      {/* 2. Privacy & Security Architecture Information */}
+      {/* 2. Age-Based Personalization Settings */}
+      <div className="bg-slate-900/40 border border-white/10 backdrop-blur-xl rounded-3xl p-6 sm:p-8 space-y-6 shadow-xl">
+        <div className="flex items-center gap-3 pb-5 border-b border-white/10">
+          <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-300 flex items-center justify-center">
+            <Compass className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="font-medium text-white text-base">Age Group Personalization</h3>
+            <p className="text-xs text-slate-400 font-light">
+              Customize your layout, prompts, drawing tools, and Gemini AI tone
+            </p>
+          </div>
+        </div>
+
+        {ageStatus && (
+          <div
+            className={`p-3.5 rounded-xl text-xs font-medium ${
+              ageStatus.type === 'success'
+                ? 'bg-teal-500/15 border border-teal-500/30 text-teal-300'
+                : 'bg-rose-500/15 border border-rose-500/30 text-rose-300'
+            }`}
+          >
+            {ageStatus.message}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          {(['3-6', '7-12', '13-17', '18+'] as AgeGroup[]).map((group) => {
+            const config = AGE_GROUP_CONFIGS[group];
+            const isSelected = selectedAge === group;
+            return (
+              <button
+                key={group}
+                type="button"
+                id={`settings-age-group-${group}`}
+                onClick={() => handleSaveAgeGroup(group)}
+                disabled={isUpdatingAge}
+                className={`p-4 rounded-2xl border text-left transition-all relative cursor-pointer ${
+                  isSelected
+                    ? 'bg-white/15 border-indigo-400/80 shadow-md ring-1 ring-indigo-400/50'
+                    : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-2xl">{config.emoji}</span>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      isSelected
+                        ? 'bg-indigo-500 text-white'
+                        : 'bg-white/10 text-slate-300'
+                    }`}
+                  >
+                    {config.badge}
+                  </span>
+                </div>
+                <h4 className="text-sm font-semibold text-white">{config.title}</h4>
+                <p className="text-xs text-slate-400 mt-1 leading-relaxed line-clamp-2">
+                  {config.tagline}
+                </p>
+                {isSelected && (
+                  <div className="absolute top-3 right-3 text-indigo-400">
+                    <Check className="w-4 h-4" />
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 3. Preferred Language Settings */}
+      <div className="bg-slate-900/40 border border-white/10 backdrop-blur-xl rounded-3xl p-6 sm:p-8 space-y-6 shadow-xl">
+        <div className="flex items-center gap-3 pb-5 border-b border-white/10">
+          <div className="w-10 h-10 rounded-2xl bg-teal-500/15 text-teal-300 flex items-center justify-center">
+            <Globe className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="font-medium text-white text-base">Language Preferences</h3>
+            <p className="text-xs text-slate-400 font-light">
+              Choose your primary language for journaling, translations, and AI reflections
+            </p>
+          </div>
+        </div>
+
+        {langStatus && (
+          <div
+            className={`p-3.5 rounded-xl text-xs font-medium ${
+              langStatus.type === 'success'
+                ? 'bg-teal-500/15 border border-teal-500/30 text-teal-300'
+                : 'bg-rose-500/15 border border-rose-500/30 text-rose-300'
+            }`}
+          >
+            {langStatus.message}
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+          {SUPPORTED_LANGUAGES.map((lang) => {
+            const isSelected = selectedLang === lang.code;
+            return (
+              <button
+                key={lang.code}
+                type="button"
+                id={`settings-lang-${lang.code}`}
+                onClick={() => handleSaveLanguage(lang.code)}
+                disabled={isUpdatingLang}
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                  isSelected
+                    ? 'bg-teal-500/20 border-teal-400/80 text-white ring-1 ring-teal-400/50'
+                    : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-2xs font-bold uppercase px-1.5 py-0.5 rounded bg-white/10 text-teal-300 font-mono">
+                    {lang.code}
+                  </span>
+                  {isSelected && <Check className="w-3.5 h-3.5 text-teal-300" />}
+                </div>
+                <p className="text-xs font-semibold text-white mt-1">{lang.name}</p>
+                <p className="text-[10px] text-slate-400">{lang.nativeName}</p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 4. Privacy & Security Architecture Information */}
       <div className="bg-slate-900/40 border border-white/10 backdrop-blur-xl rounded-3xl p-6 sm:p-8 space-y-6 shadow-xl">
         <div className="flex items-center gap-3 pb-5 border-b border-white/10">
           <div className="w-10 h-10 rounded-2xl bg-teal-500/15 text-teal-300 flex items-center justify-center">

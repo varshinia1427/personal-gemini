@@ -2,6 +2,19 @@ export type MoodType = 'Happy' | 'Calm' | 'Excited' | 'Sad' | 'Angry' | 'Anxious
 
 export type JournalAppMode = 'personal' | 'kids';
 
+export type AgeGroup = '3-6' | '7-12' | '13-17' | '18+';
+
+export interface AgeGroupConfig {
+  id: AgeGroup;
+  title: string;
+  subtitle: string;
+  badge: string;
+  icon: string;
+  color: string;
+  accentGradient: string;
+  description: string;
+}
+
 export type LanguageCode =
   | 'en'
   | 'ta'
@@ -26,11 +39,23 @@ export interface LanguageOption {
   dir?: 'ltr' | 'rtl';
 }
 
+export interface GoalItem {
+  id: string;
+  title: string;
+  category: 'school' | 'personal' | 'mindset' | 'creative';
+  completed: boolean;
+  createdAt: string;
+  targetDate?: string;
+}
+
 export interface User {
   id: string;
   email: string;
   name: string;
   created_at: string;
+  ageGroup?: AgeGroup;
+  preferredLanguage?: LanguageCode;
+  goals?: GoalItem[];
 }
 
 export interface JournalImage {
@@ -62,6 +87,7 @@ export interface ReflectionData {
   createdAt: string;
   modelUsed?: string;
   isKidsReflection?: boolean;
+  ageGroup?: AgeGroup;
 }
 
 export interface JournalEntry {
@@ -73,12 +99,31 @@ export interface JournalEntry {
   is_draft: boolean;
   language: LanguageCode;
   mode?: JournalAppMode;
+  ageGroup?: AgeGroup;
   drawing?: string | null; // Base64 PNG data URL of drawing
   images?: JournalImage[];
   voiceRecording?: VoiceRecording | null;
   reflection?: ReflectionData | null;
+  schoolReflection?: string;
+  personalGrowth?: string;
+  dailyQuestion?: string;
+  dailyQuestionAnswer?: string;
+  tags?: string[];
   created_at: string;
   updated_at: string;
+}
+
+export interface StoryItem {
+  id: string;
+  title: string;
+  content: string;
+  ageGroup: AgeGroup;
+  genre: string;
+  coverEmoji: string;
+  language: LanguageCode;
+  readTimeMinutes?: number;
+  moralLesson?: string;
+  createdAt: string;
 }
 
 export interface KidBadge {

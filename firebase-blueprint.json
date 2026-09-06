@@ -17,6 +17,14 @@
           "type": "string",
           "description": "User display name"
         },
+        "ageGroup": {
+          "type": "string",
+          "description": "User selected age group: 3-6, 7-12, 13-17, or 18+"
+        },
+        "preferredLanguage": {
+          "type": "string",
+          "description": "User preferred language code"
+        },
         "created_at": {
           "type": "string",
           "description": "Account creation ISO timestamp"
@@ -36,6 +44,10 @@
         "user_id": {
           "type": "string",
           "description": "Owner Firebase UID"
+        },
+        "ageGroup": {
+          "type": "string",
+          "description": "Target age group tier for the entry"
         },
         "title": {
           "type": "string",

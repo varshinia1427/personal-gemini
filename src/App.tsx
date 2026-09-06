@@ -6,7 +6,12 @@ import {
   CheckCircle2, 
   AlertCircle 
 } from 'lucide-react';
-import { apiLogout } from './services/api';
+import { 
+  apiLogout, 
+  apiUpdateUserAgeGroup, 
+  apiUpdateUserLanguage, 
+  apiGetEntries 
+} from './services/api';
 import { subscribeToAuth } from './services/firebase';
 import { Sidebar, NavTab } from './components/Sidebar';
 import { LandingPage } from './components/LandingPage';
@@ -17,7 +22,10 @@ import { EntryDetailModal } from './components/EntryDetailModal';
 import { ProfileSettings } from './components/ProfileSettings';
 import { KidsMyDay } from './components/kids/KidsMyDay';
 import { KidsDashboard } from './components/kids/KidsDashboard';
-import type { JournalEntry, User, JournalAppMode } from './types';
+import { StoryCorner } from './components/StoryCorner';
+import { WelcomeAgeSelection } from './components/WelcomeAgeSelection';
+import { AskGeminiModal } from './components/AskGeminiModal';
+import type { JournalEntry, User, JournalAppMode, AgeGroup, LanguageCode } from './types';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -29,6 +37,11 @@ export default function App() {
   // Active viewing/editing modals
   const [viewingEntry, setViewingEntry] = useState<JournalEntry | null>(null);
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
+
+  // Age selection & Ask Gemini modals
+  const [showAgeSelectionModal, setShowAgeSelectionModal] = useState(false);
+  const [isAskGeminiOpen, setIsAskGeminiOpen] = useState(false);
+  const [journalEntriesForGemini, setJournalEntriesForGemini] = useState<JournalEntry[]>([]);
 
   // Global toast notice
   const [globalNotice, setGlobalNotice] = useState<{ type: 'success' | 'info' | 'error'; text: string } | null>(null);
@@ -54,6 +67,10 @@ export default function App() {
     const unsubscribe = subscribeToAuth((authUser) => {
       setUser(authUser);
       setIsLoadingAuth(false);
+      // Auto-set kids mode if age 3-6
+      if (authUser?.ageGroup === '3-6') {
+        setAppMode('kids');
+      }
     });
 
     return () => {
@@ -63,7 +80,12 @@ export default function App() {
 
   const handleLoginSuccess = (authenticatedUser: User) => {
     setUser(authenticatedUser);
-    setCurrentTab('dashboard');
+    if (authenticatedUser.ageGroup === '3-6') {
+      setAppMode('kids');
+      setCurrentTab('kids-dashboard');
+    } else {
+      setCurrentTab('dashboard');
+    }
     showToast(`Welcome back, ${authenticatedUser.name || 'Friend'}!`, 'success');
   };
 
@@ -75,6 +97,8 @@ export default function App() {
     } finally {
       setUser(null);
       setCurrentTab('dashboard');
+      setShowAgeSelectionModal(false);
+      setIsAskGeminiOpen(false);
       showToast('Logged out securely.', 'info');
     }
   };
@@ -89,6 +113,45 @@ export default function App() {
     setViewingEntry(null);
     setEditingEntry(entry);
     setCurrentTab('new-entry');
+  };
+
+  // Age group selection handler
+  const handleSelectAgeGroup = async (selectedAge: AgeGroup) => {
+    try {
+      const updatedUser = await apiUpdateUserAgeGroup(selectedAge);
+      setUser(updatedUser);
+      setShowAgeSelectionModal(false);
+      if (selectedAge === '3-6') {
+        setAppMode('kids');
+      }
+      showToast(`Personalized for ${selectedAge}! 🎉`, 'success');
+    } catch (err) {
+      console.error('Failed to update age group:', err);
+      showToast('Failed to save age group. Please try again.', 'error');
+    }
+  };
+
+  // Language update handler
+  const handleUpdateLanguage = async (lang: LanguageCode) => {
+    try {
+      const updatedUser = await apiUpdateUserLanguage(lang);
+      setUser(updatedUser);
+      showToast('Language preference updated! 🌐', 'success');
+    } catch (err) {
+      console.error('Failed to update language:', err);
+      showToast('Failed to save language preference.', 'error');
+    }
+  };
+
+  // Open Ask Gemini and prefetch recent entries
+  const handleOpenAskGemini = async () => {
+    setIsAskGeminiOpen(true);
+    try {
+      const res = await apiGetEntries();
+      setJournalEntriesForGemini(res.entries);
+    } catch (err) {
+      console.warn('Could not load entries for Gemini context:', err);
+    }
   };
 
   // Loading splash with frosted glass styling
@@ -113,6 +176,18 @@ export default function App() {
     return <LandingPage onLoginSuccess={handleLoginSuccess} />;
   }
 
+  // First Login Age Selection: If user has no ageGroup stored, show welcome age selection
+  if (!user.ageGroup && !showAgeSelectionModal) {
+    return (
+      <WelcomeAgeSelection
+        currentAgeGroup="18+"
+        userName={user.name}
+        onSelectAgeGroup={handleSelectAgeGroup}
+        isModal={false}
+      />
+    );
+  }
+
   return (
     <div className={`min-h-screen text-slate-100 flex ${appMode === 'kids' ? 'bg-radial-kids' : ''}`}>
       {/* Sidebar Navigation */}
@@ -130,6 +205,9 @@ export default function App() {
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
         mode={appMode}
         onToggleMode={handleModeChange}
+        ageGroup={user.ageGroup || '18+'}
+        onChangeAgeGroup={() => setShowAgeSelectionModal(true)}
+        onOpenAskGemini={handleOpenAskGemini}
       />
 
       {/* Main Content Area */}
@@ -215,12 +293,27 @@ export default function App() {
           {currentTab === 'dashboard' && (
             <Dashboard
               user={user}
+              ageGroup={user.ageGroup || '18+'}
               onNavigateNewEntry={() => {
-                setEditingEntry(null);
-                setCurrentTab('new-entry');
+                if (user.ageGroup === '3-6' || appMode === 'kids') {
+                  setCurrentTab('kids-my-day');
+                } else {
+                  setEditingEntry(null);
+                  setCurrentTab('new-entry');
+                }
               }}
               onNavigateMyJournal={() => setCurrentTab('my-journal')}
+              onNavigateStoryCorner={() => setCurrentTab('story-corner')}
               onSelectEntry={(entry) => setViewingEntry(entry)}
+              onOpenAskGemini={handleOpenAskGemini}
+              onChangeAgeGroup={() => setShowAgeSelectionModal(true)}
+            />
+          )}
+
+          {currentTab === 'story-corner' && (
+            <StoryCorner
+              currentAgeGroup={user.ageGroup || '18+'}
+              currentLanguage={user.preferredLanguage || 'en'}
             />
           )}
 
@@ -250,6 +343,10 @@ export default function App() {
             <ProfileSettings
               user={user}
               onLogout={handleLogout}
+              currentAgeGroup={user.ageGroup || '18+'}
+              currentLanguage={user.preferredLanguage || 'en'}
+              onUpdateAgeGroup={handleSelectAgeGroup}
+              onUpdateLanguage={handleUpdateLanguage}
               onEntriesCleared={() => {
                 showToast('All journal entries have been cleared from Firestore.', 'info');
               }}
@@ -273,6 +370,26 @@ export default function App() {
           }}
         />
       )}
+
+      {/* Modal: Change Age Group */}
+      {showAgeSelectionModal && (
+        <WelcomeAgeSelection
+          currentAgeGroup={user?.ageGroup || '18+'}
+          userName={user?.name}
+          onSelectAgeGroup={handleSelectAgeGroup}
+          isModal={true}
+          onClose={() => setShowAgeSelectionModal(false)}
+        />
+      )}
+
+      {/* Modal: Ask Gemini Q&A */}
+      <AskGeminiModal
+        isOpen={isAskGeminiOpen}
+        onClose={() => setIsAskGeminiOpen(false)}
+        entries={journalEntriesForGemini}
+        ageGroup={user.ageGroup || '18+'}
+        language={user.preferredLanguage || 'en'}
+      />
     </div>
   );
 }

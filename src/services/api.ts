@@ -14,15 +14,22 @@ import {
   deleteUserEntry,
   clearAllUserEntries,
   fetchDashboardStats,
+  updateUserAgeGroup,
+  updateUserLanguage,
+  updateUserGoals,
+  fetchUserProfile,
 } from './firebase';
 import { getLanguageOption } from '../utils/languages';
 import type {
+  AgeGroup,
   DashboardStats,
+  GoalItem,
   JournalEntry,
   JournalImage,
   LanguageCode,
   MoodType,
   ReflectionData,
+  StoryItem,
   User,
   VoiceRecording,
 } from '../types';
@@ -86,6 +93,36 @@ export async function apiClearUserData(): Promise<{ message: string }> {
   return { message: `Successfully deleted ${deletedCount} entries from your private Firestore collection.` };
 }
 
+export async function apiUpdateUserAgeGroup(ageGroup: AgeGroup): Promise<User> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Authentication required.');
+  }
+  await updateUserAgeGroup(currentUser.uid, ageGroup);
+  const profile = await fetchUserProfile(currentUser.uid);
+  return mapFirebaseUser(currentUser, profile || undefined);
+}
+
+export async function apiUpdateUserLanguage(language: LanguageCode): Promise<User> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Authentication required.');
+  }
+  await updateUserLanguage(currentUser.uid, language);
+  const profile = await fetchUserProfile(currentUser.uid);
+  return mapFirebaseUser(currentUser, profile || undefined);
+}
+
+export async function apiUpdateUserGoals(goals: GoalItem[]): Promise<void> {
+  const uid = requireAuthenticatedUid();
+  await updateUserGoals(uid, goals);
+}
+
+export async function apiGetProfile(): Promise<User | null> {
+  const uid = requireAuthenticatedUid();
+  return fetchUserProfile(uid);
+}
+
 // ----------------------------------------------------
 // JOURNAL API (FIRESTORE - AUTHENTICATED USER ONLY)
 // ----------------------------------------------------
@@ -125,12 +162,18 @@ export async function apiCreateEntry(data: {
   mood: MoodType;
   language?: LanguageCode;
   mode?: 'personal' | 'kids';
+  ageGroup?: AgeGroup;
   drawing?: string | null;
   images?: JournalImage[];
   voiceRecording?: VoiceRecording | null;
   is_draft?: boolean;
   created_at?: string;
   reflection?: ReflectionData | null;
+  schoolReflection?: string;
+  personalGrowth?: string;
+  dailyQuestion?: string;
+  dailyQuestionAnswer?: string;
+  tags?: string[];
 }): Promise<{ entry: JournalEntry; message: string }> {
   const uid = requireAuthenticatedUid();
   const entry = await saveUserEntry(uid, data);
@@ -145,12 +188,28 @@ export async function apiUpdateEntry(
   data: Partial<
     Pick<
       JournalEntry,
-      'title' | 'content' | 'mood' | 'language' | 'mode' | 'drawing' | 'images' | 'voiceRecording' | 'is_draft' | 'created_at' | 'reflection'
+      | 'title'
+      | 'content'
+      | 'mood'
+      | 'language'
+      | 'mode'
+      | 'ageGroup'
+      | 'drawing'
+      | 'images'
+      | 'voiceRecording'
+      | 'is_draft'
+      | 'created_at'
+      | 'reflection'
+      | 'schoolReflection'
+      | 'personalGrowth'
+      | 'dailyQuestion'
+      | 'dailyQuestionAnswer'
+      | 'tags'
     >
   >
 ): Promise<{ entry: JournalEntry; message: string }> {
   const uid = requireAuthenticatedUid();
-  const entry = await updateUserEntry(uid, id, data);
+  const entry = await updateUserEntry(uid, id, data as any);
   return {
     entry,
     message: 'Journal entry updated successfully.',
@@ -176,6 +235,11 @@ export async function apiReflectDraft(params: {
   images?: JournalImage[];
   drawing?: string | null;
   isKidsMode?: boolean;
+  ageGroup?: AgeGroup;
+  schoolReflection?: string;
+  personalGrowth?: string;
+  dailyQuestion?: string;
+  dailyQuestionAnswer?: string;
 }): Promise<{ reflection: ReflectionData }> {
   const token = await getAuthToken();
   const headers: Record<string, string> = {
@@ -202,6 +266,11 @@ export async function apiReflectDraft(params: {
       })),
       drawing: params.drawing || undefined,
       isKidsMode: Boolean(params.isKidsMode),
+      ageGroup: params.ageGroup,
+      schoolReflection: params.schoolReflection,
+      personalGrowth: params.personalGrowth,
+      dailyQuestion: params.dailyQuestion,
+      dailyQuestionAnswer: params.dailyQuestionAnswer,
     }),
   });
 
@@ -318,3 +387,74 @@ export async function apiGetStats(): Promise<DashboardStats> {
   const uid = requireAuthenticatedUid();
   return fetchDashboardStats(uid);
 }
+
+// ----------------------------------------------------
+// STORY CORNER API
+// ----------------------------------------------------
+
+export async function apiGenerateStory(params: {
+  ageGroup: AgeGroup;
+  genre?: string;
+  prompt?: string;
+  language?: LanguageCode;
+}): Promise<{ story: StoryItem }> {
+  const token = await getAuthToken();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const langOption = getLanguageOption(params.language || 'en');
+
+  const res = await fetch('/api/story', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      ageGroup: params.ageGroup,
+      genre: params.genre,
+      prompt: params.prompt,
+      language: params.language || 'en',
+      languageName: `${langOption.name} (${langOption.nativeName})`,
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to generate story.');
+  }
+  return data;
+}
+
+// ----------------------------------------------------
+// ASK GEMINI ABOUT MY JOURNAL API
+// ----------------------------------------------------
+
+export async function apiAskGemini(params: {
+  question: string;
+  entriesSummary: { title: string; content: string; mood: string; date: string }[];
+  language?: LanguageCode;
+  ageGroup?: AgeGroup;
+}): Promise<{ answer: string; relatedThemes: string[] }> {
+  const token = await getAuthToken();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const langOption = getLanguageOption(params.language || 'en');
+
+  const res = await fetch('/api/ask-gemini', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      question: params.question,
+      entriesSummary: params.entriesSummary,
+      language: params.language || 'en',
+      languageName: `${langOption.name} (${langOption.nativeName})`,
+      ageGroup: params.ageGroup || '18+',
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to answer question.');
+  }
+  return data;
+}
+
