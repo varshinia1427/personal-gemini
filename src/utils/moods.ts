@@ -90,6 +90,48 @@ export const MOODS: MoodConfig[] = [
     emoji: '🌙',
     description: 'Drained, fatigued, or needing rest',
   },
+  {
+    value: 'Good',
+    label: 'Good',
+    color: 'emerald',
+    textColor: 'text-emerald-300',
+    bgLight: 'bg-emerald-500/15 backdrop-blur-md',
+    border: 'border-emerald-500/30',
+    accentDot: 'bg-emerald-400',
+    emoji: '🙂',
+    description: 'Doing well and feeling positive',
+  },
+  {
+    value: 'Okay',
+    label: 'Okay',
+    color: 'sky',
+    textColor: 'text-sky-300',
+    bgLight: 'bg-sky-500/15 backdrop-blur-md',
+    border: 'border-sky-500/30',
+    accentDot: 'bg-sky-400',
+    emoji: '😐',
+    description: 'Neutral, easygoing, or steady',
+  },
+];
+
+export interface KidMoodConfig {
+  value: MoodType;
+  label: string;
+  emoji: string;
+  color: string;
+  bgLight: string;
+  border: string;
+  textColor: string;
+}
+
+export const KIDS_MOODS: KidMoodConfig[] = [
+  { value: 'Happy', label: 'Happy', emoji: '😊', color: 'amber', bgLight: 'bg-amber-500/20', border: 'border-amber-400/40', textColor: 'text-amber-200' },
+  { value: 'Good', label: 'Good', emoji: '🙂', color: 'emerald', bgLight: 'bg-emerald-500/20', border: 'border-emerald-400/40', textColor: 'text-emerald-200' },
+  { value: 'Okay', label: 'Okay', emoji: '😐', color: 'slate', bgLight: 'bg-slate-500/20', border: 'border-slate-400/40', textColor: 'text-slate-200' },
+  { value: 'Sad', label: 'Sad', emoji: '😢', color: 'sky', bgLight: 'bg-sky-500/20', border: 'border-sky-400/40', textColor: 'text-sky-200' },
+  { value: 'Angry', label: 'Angry', emoji: '😠', color: 'rose', bgLight: 'bg-rose-500/20', border: 'border-rose-400/40', textColor: 'text-rose-200' },
+  { value: 'Excited', label: 'Excited', emoji: '🤩', color: 'yellow', bgLight: 'bg-yellow-500/20', border: 'border-yellow-400/40', textColor: 'text-yellow-200' },
+  { value: 'Calm', label: 'Calm', emoji: '😌', color: 'teal', bgLight: 'bg-teal-500/20', border: 'border-teal-400/40', textColor: 'text-teal-200' },
 ];
 
 export function getMoodConfig(mood: MoodType): MoodConfig {

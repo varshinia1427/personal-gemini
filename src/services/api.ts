@@ -103,6 +103,7 @@ export async function apiGetEntries(params?: {
   mood?: string;
   language?: string;
   isDraft?: boolean;
+  mode?: string;
 }): Promise<{ entries: JournalEntry[] }> {
   const uid = requireAuthenticatedUid();
   const entries = await fetchUserEntries(uid, params);
@@ -123,6 +124,8 @@ export async function apiCreateEntry(data: {
   content: string;
   mood: MoodType;
   language?: LanguageCode;
+  mode?: 'personal' | 'kids';
+  drawing?: string | null;
   images?: JournalImage[];
   voiceRecording?: VoiceRecording | null;
   is_draft?: boolean;
@@ -142,7 +145,7 @@ export async function apiUpdateEntry(
   data: Partial<
     Pick<
       JournalEntry,
-      'title' | 'content' | 'mood' | 'language' | 'images' | 'voiceRecording' | 'is_draft' | 'created_at' | 'reflection'
+      'title' | 'content' | 'mood' | 'language' | 'mode' | 'drawing' | 'images' | 'voiceRecording' | 'is_draft' | 'created_at' | 'reflection'
     >
   >
 ): Promise<{ entry: JournalEntry; message: string }> {
@@ -171,6 +174,8 @@ export async function apiReflectDraft(params: {
   language?: LanguageCode;
   voiceTranscription?: string;
   images?: JournalImage[];
+  drawing?: string | null;
+  isKidsMode?: boolean;
 }): Promise<{ reflection: ReflectionData }> {
   const token = await getAuthToken();
   const headers: Record<string, string> = {
@@ -195,6 +200,8 @@ export async function apiReflectDraft(params: {
       images: (params.images || []).map((img) => ({
         dataUrl: img.dataUrl,
       })),
+      drawing: params.drawing || undefined,
+      isKidsMode: Boolean(params.isKidsMode),
     }),
   });
 

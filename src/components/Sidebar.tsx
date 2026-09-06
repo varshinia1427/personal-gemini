@@ -6,11 +6,14 @@ import {
   User, 
   LogOut, 
   Sparkles, 
-  X 
+  X,
+  Sun,
+  Award,
+  Palette
 } from 'lucide-react';
-import type { User as UserType } from '../types';
+import type { User as UserType, JournalAppMode } from '../types';
 
-export type NavTab = 'dashboard' | 'new-entry' | 'my-journal' | 'settings';
+export type NavTab = 'dashboard' | 'new-entry' | 'my-journal' | 'settings' | 'kids-my-day' | 'kids-dashboard';
 
 interface SidebarProps {
   currentTab: NavTab;
@@ -19,6 +22,8 @@ interface SidebarProps {
   onLogout: () => void;
   isOpenMobile: boolean;
   onCloseMobile: () => void;
+  mode: JournalAppMode;
+  onToggleMode: (mode: JournalAppMode) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -28,13 +33,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
   isOpenMobile,
   onCloseMobile,
+  mode,
+  onToggleMode,
 }) => {
-  const navItems: { id: NavTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  const personalNavItems: { id: NavTab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: string }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'new-entry', label: 'New Entry', icon: PenLine },
+    { id: 'new-entry', label: 'New Entry', icon: PenLine, badge: '+ New' },
     { id: 'my-journal', label: 'My Journal', icon: BookOpen },
     { id: 'settings', label: 'Profile & Settings', icon: User },
   ];
+
+  const kidsNavItems: { id: NavTab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: string }[] = [
+    { id: 'kids-my-day', label: 'My Day', icon: Sun, badge: '☀️ Start' },
+    { id: 'kids-dashboard', label: 'Badges & Memories', icon: Award },
+    { id: 'settings', label: 'Settings', icon: User },
+  ];
+
+  const navItems = mode === 'kids' ? kidsNavItems : personalNavItems;
 
   const handleNav = (tab: NavTab) => {
     onSelectTab(tab);
@@ -42,19 +57,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-slate-900/40 backdrop-blur-xl border-r border-white/10 text-slate-100">
+    <div className="flex flex-col h-full bg-slate-900/50 backdrop-blur-xl border-r border-white/10 text-slate-100">
       {/* App Branding */}
       <div className="p-6 sm:p-8 border-b border-white/10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-400 to-teal-400 flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
-              <span className="font-bold text-slate-900 text-lg">G</span>
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shadow-lg shrink-0 ${
+              mode === 'kids'
+                ? 'bg-gradient-to-br from-amber-400 via-pink-400 to-indigo-400 text-slate-950 font-black'
+                : 'bg-gradient-to-br from-indigo-400 to-teal-400 text-slate-900 font-bold'
+            }`}>
+              <span className="text-lg">{mode === 'kids' ? '🌟' : 'G'}</span>
             </div>
             <div>
               <h1 className="text-base font-semibold tracking-tight text-white leading-tight">
-                Gemini Journal
+                {mode === 'kids' ? 'Kids Journal' : 'Gemini Journal'}
               </h1>
-              <p className="text-2xs text-teal-400 font-medium">AI Reflection Studio</p>
+              <p className="text-2xs text-teal-400 font-medium">
+                {mode === 'kids' ? 'Fun Day & Memories' : 'AI Reflection Studio'}
+              </p>
             </div>
           </div>
           {/* Mobile close button */}
@@ -69,12 +90,46 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <p className="text-xs text-slate-400 mt-4 italic font-light leading-relaxed">
-          "Your thoughts. Your journal. Your AI reflection — <span className="text-indigo-300">privately.</span>"
+          {mode === 'kids'
+            ? '"Draw, talk, snap pictures, and celebrate your day!"'
+            : '"Your thoughts. Your journal. Your AI reflection — privately."'}
         </p>
       </div>
 
+      {/* Mode Switcher Toggle */}
+      <div className="px-4 pt-4 pb-2">
+        <div className="bg-slate-950/60 p-1.5 rounded-2xl border border-white/10 flex items-center gap-1.5 shadow-inner">
+          <button
+            id="sidebar-mode-personal"
+            type="button"
+            onClick={() => onToggleMode('personal')}
+            className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              mode === 'personal'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-1 ring-white/20'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <span>🧘</span>
+            <span>Personal</span>
+          </button>
+          <button
+            id="sidebar-mode-kids"
+            type="button"
+            onClick={() => onToggleMode('kids')}
+            className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              mode === 'kids'
+                ? 'bg-gradient-to-r from-amber-400 to-pink-500 text-slate-950 shadow-md shadow-amber-500/25 ring-1 ring-white/30'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <span>🌟</span>
+            <span>Kids Mode</span>
+          </button>
+        </div>
+      </div>
+
       {/* Navigation Links */}
-      <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+      <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = currentTab === item.id;
@@ -85,15 +140,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onClick={() => handleNav(item.id)}
               className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-medium transition-all text-left cursor-pointer ${
                 isActive
-                  ? 'bg-white/10 text-indigo-300 border border-white/10 shadow-xs'
+                  ? mode === 'kids'
+                    ? 'bg-gradient-to-r from-amber-400/20 to-pink-500/20 text-amber-200 border border-amber-400/30 shadow-xs'
+                    : 'bg-white/10 text-indigo-300 border border-white/10 shadow-xs'
                   : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
               }`}
             >
-              <Icon className={`w-4.5 h-4.5 shrink-0 ${isActive ? 'text-indigo-300' : 'text-slate-400'}`} />
+              <Icon className={`w-4.5 h-4.5 shrink-0 ${
+                isActive
+                  ? mode === 'kids' ? 'text-amber-300' : 'text-indigo-300'
+                  : 'text-slate-400'
+              }`} />
               <span className="truncate">{item.label}</span>
-              {item.id === 'new-entry' && (
-                <span className="ml-auto text-2xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-medium">
-                  + New
+              {item.badge && (
+                <span className={`ml-auto text-2xs px-2 py-0.5 rounded-full font-bold border ${
+                  mode === 'kids'
+                    ? 'bg-amber-400/20 text-amber-200 border-amber-300/30'
+                    : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
+                }`}>
+                  {item.badge}
                 </span>
               )}
             </button>
@@ -105,14 +170,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-4">
         <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-2xl p-4">
           <p className="text-[10px] uppercase tracking-widest text-indigo-400 font-bold mb-1">
-            Privacy Status
+            Privacy & Family Safe
           </p>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></div>
-            <span className="text-xs text-slate-300">Fully Encrypted</span>
+            <span className="text-xs text-slate-300">Firestore UID Isolation</span>
           </div>
           <p className="text-[11px] text-slate-400 mt-1.5 leading-normal font-light">
-            Isolated per user account. Zero public AI model training.
+            All drawings, photos, and voice notes belong strictly to your private account.
           </p>
         </div>
       </div>
@@ -165,3 +230,4 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </>
   );
 };
+

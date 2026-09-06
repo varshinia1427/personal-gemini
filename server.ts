@@ -46,24 +46,31 @@ function requireAuth(req: Request, res: Response, next: () => void) {
 // ==========================================
 app.post('/api/reflect', requireAuth, async (req: Request, res: Response) => {
   try {
-    const { title, content, mood, language, languageName, voiceTranscription, images } = req.body;
+    const { title, content, mood, language, languageName, voiceTranscription, images, drawing, isKidsMode } = req.body;
 
-    if ((!content || typeof content !== 'string' || content.trim().length < 3) && (!voiceTranscription || voiceTranscription.trim().length < 3)) {
-      res.status(400).json({ error: 'Please provide either journal text or a voice transcription before requesting an AI reflection.' });
+    const hasText = Boolean(content && typeof content === 'string' && content.trim().length >= 2);
+    const hasVoice = Boolean(voiceTranscription && typeof voiceTranscription === 'string' && voiceTranscription.trim().length >= 2);
+    const hasDrawing = Boolean(drawing && typeof drawing === 'string' && drawing.startsWith('data:image/'));
+    const hasImages = Array.isArray(images) && images.length > 0;
+
+    if (!hasText && !hasVoice && !hasDrawing && !hasImages) {
+      res.status(400).json({ error: 'Please provide some text, voice recording, drawing, or photo before requesting an AI reflection.' });
       return;
     }
 
-    const validMoods: MoodType[] = ['Happy', 'Calm', 'Excited', 'Sad', 'Angry', 'Anxious', 'Tired'];
-    const selectedMood: MoodType = validMoods.includes(mood) ? mood : 'Calm';
+    const validMoods: MoodType[] = ['Happy', 'Calm', 'Excited', 'Sad', 'Angry', 'Anxious', 'Tired', 'Good', 'Okay'];
+    const selectedMood: MoodType = validMoods.includes(mood) ? mood : 'Happy';
 
     const reflection = await generateMultimodalReflection({
-      title: title || 'Untitled',
+      title: title || (isKidsMode ? 'My Day' : 'Untitled'),
       content: content || '',
       mood: selectedMood,
       language: language || 'en',
       languageName: languageName || 'English',
       voiceTranscription: voiceTranscription || '',
       images: Array.isArray(images) ? images : [],
+      drawing: drawing || undefined,
+      isKidsMode: Boolean(isKidsMode),
     });
 
     res.json({ reflection });

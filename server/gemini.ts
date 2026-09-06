@@ -25,6 +25,8 @@ export interface MultimodalReflectionInput {
   languageName?: string;
   voiceTranscription?: string;
   images?: { dataUrl: string; mimeType?: string }[];
+  drawing?: string;
+  isKidsMode?: boolean;
 }
 
 export async function generateMultimodalReflection(
@@ -39,6 +41,8 @@ export async function generateMultimodalReflection(
     languageName = 'English',
     voiceTranscription,
     images = [],
+    drawing,
+    isKidsMode = false,
   } = input;
 
   if (client) {
@@ -61,7 +65,58 @@ export async function generateMultimodalReflection(
         }
       }
 
-      let promptText = `MULTIMODAL JOURNAL REFLECTION REQUEST:
+      // Add drawing as an inline image part if provided
+      if (drawing) {
+        const drawMatch = drawing.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+        if (drawMatch) {
+          contentsParts.push({
+            inlineData: {
+              mimeType: drawMatch[1],
+              data: drawMatch[2],
+            },
+          });
+        }
+      }
+
+      let promptText = '';
+
+      if (isKidsMode) {
+        promptText = `KIDS MODE JOURNAL REFLECTION REQUEST:
+Target Language: ${languageName} (code: ${language})
+Entry Title: "${title || 'My Day'}"
+Child's Feeling / Mood: ${mood}
+
+CHILD'S WRITTEN THOUGHTS:
+"""
+${content || '(No written text)'}
+"""`;
+
+        if (voiceTranscription && voiceTranscription.trim()) {
+          promptText += `\n\nCHILD'S SPOKEN VOICE WORDS:
+"""
+${voiceTranscription}
+"""`;
+        }
+
+        if (drawing) {
+          promptText += `\n\nCHILD'S DRAWING:
+The child created a personal drawing (included as an image above). Please notice the creativity, colors, and effort in their art!`;
+        }
+
+        if (images.length > 0) {
+          promptText += `\n\nCHILD'S PHOTO(S):
+The child shared ${images.length} photo(s) of their day (included as images above). Celebrate what they captured!`;
+        }
+
+        promptText += `\n\nCRITICAL KIDS MODE DIRECTIVES:
+1. Generate a short, friendly, and age-appropriate reflection (1-3 sentences) suitable for children.
+   For example: "It sounds like you had a fun day at the park! What was your favorite part?"
+2. Keep the response positive, simple, warm, and encouraging.
+3. STRICT SAFETY RULE: Do NOT make medical, psychological, diagnostic, or sensitive conclusions about the child.
+4. All text MUST be in ${languageName} (${language}).
+5. Respond strictly in the provided JSON schema.`;
+      } else {
+        promptText = `MULTIMODAL JOURNAL REFLECTION REQUEST:
 Target Language: ${languageName} (code: ${language})
 Journal Title: "${title || 'Untitled'}"
 Selected Mood: ${mood}
@@ -71,47 +126,62 @@ WRITTEN JOURNAL CONTENT:
 ${content}
 """`;
 
-      if (voiceTranscription && voiceTranscription.trim()) {
-        promptText += `\n\nSPOKEN VOICE JOURNAL TRANSCRIPTION:
+        if (voiceTranscription && voiceTranscription.trim()) {
+          promptText += `\n\nSPOKEN VOICE JOURNAL TRANSCRIPTION:
 """
 ${voiceTranscription}
 """`;
-      }
+        }
 
-      if (images.length > 0) {
-        promptText += `\n\nATTACHED IMAGES:
+        if (images.length > 0) {
+          promptText += `\n\nATTACHED IMAGES:
 The user has attached ${images.length} photo(s) to this journal entry. Analyze their emotional tone, subjects, setting, and significance in tandem with the written and spoken words.`;
-      }
+        }
 
-      promptText += `\n\nCRITICAL MULTILINGUAL DIRECTIVE:
+        promptText += `\n\nCRITICAL MULTILINGUAL DIRECTIVE:
 You MUST generate ALL fields of your reflection in ${languageName} (${language}). Every single explanation, question, theme, and summary MUST be in ${languageName}. If the entry text is in another language, translate your thoughts into ${languageName}.
 
 Respond strictly in the provided JSON schema.`;
+      }
 
       contentsParts.push(promptText);
 
-      const response = await client.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: contentsParts,
-        config: {
-          systemInstruction: `You are the empathetic, observant, multimodal AI companion for "Personal Gemini Journal".
+      const systemInstruction = isKidsMode
+        ? `You are a warm, kind, encouraging, and friendly companion for a child using "Personal Gemini Journal: Kids Mode".
+Your role is to celebrate the child's daily experiences, drawings, and feelings with positivity and enthusiasm.
+RULES FOR KIDS MODE:
+- Respond in simple, cheerful, age-appropriate language (for ages 5-12).
+- Celebrate what they wrote, said, drew, or photographed with genuine warmth.
+- Ask 1 friendly, fun follow-up question.
+- STRICT SAFETY RULE: Do NOT make medical, psychological, diagnostic, or sensitive conclusions about the child.
+- NEVER sound clinical, formal, or critical.
+- ALWAYS respond in the child's selected language (${languageName}).`
+        : `You are the empathetic, observant, multimodal AI companion for "Personal Gemini Journal".
 Your role is to support mindful personal reflection, clarity, and self-awareness across text, voice recordings, and imagery.
 ETHICAL & SAFETY GUIDELINES:
 - You are a reflective journaling companion, NOT a doctor, psychiatrist, or medical professional.
 - DO NOT provide clinical diagnosis, medical advice, or prescriptions.
 - Emphasize emotional depth, gratitude, resilience, and compassionate self-inquiry.
-- ALWAYS respond in the user's requested language (${languageName}).`,
+- ALWAYS respond in the user's requested language (${languageName}).`;
+
+      const response = await client.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: contentsParts,
+        config: {
+          systemInstruction,
           responseMimeType: 'application/json',
           responseSchema: {
             type: Type.OBJECT,
             properties: {
               personalReflection: {
                 type: Type.STRING,
-                description: 'A compassionate, deep personal reflection connecting thoughts, voice, and visual memories.',
+                description: isKidsMode
+                  ? 'A short, cheerful, friendly reflection for the child with an encouraging question.'
+                  : 'A compassionate, deep personal reflection connecting thoughts, voice, and visual memories.',
               },
               summary: {
                 type: Type.STRING,
-                description: 'A concise 2-3 sentence summary of the entry.',
+                description: isKidsMode ? 'A simple 1-2 sentence happy summary of their day.' : 'A concise 2-3 sentence summary of the entry.',
               },
               keyThemes: {
                 type: Type.ARRAY,
@@ -120,22 +190,22 @@ ETHICAL & SAFETY GUIDELINES:
               },
               moodInsight: {
                 type: Type.STRING,
-                description: 'An insightful analysis of the emotional current and what influenced it.',
+                description: 'An insightful analysis of the emotional current.',
               },
               positiveObservations: {
                 type: Type.ARRAY,
                 items: { type: Type.STRING },
-                description: '2 to 3 strengths, positive moments, or resilience noted.',
+                description: '2 to 3 strengths, positive moments, or praise for their creativity.',
               },
               reflectionQuestions: {
                 type: Type.ARRAY,
                 items: { type: Type.STRING },
-                description: '2 to 3 thoughtful questions for self-inquiry.',
+                description: '1 to 2 friendly questions for the child or self-inquiry.',
               },
               gentleSuggestions: {
                 type: Type.ARRAY,
                 items: { type: Type.STRING },
-                description: '2 to 3 gentle, non-prescriptive mindful suggestions.',
+                description: '1 to 2 gentle suggestions.',
               },
               detectedMood: {
                 type: Type.STRING,
@@ -161,22 +231,23 @@ ETHICAL & SAFETY GUIDELINES:
         const parsed = JSON.parse(rawText);
         return {
           personalReflection: parsed.personalReflection || parsed.summary,
-          summary: parsed.summary || 'A thoughtful multimodal reflection on your thoughts and experiences.',
+          summary: parsed.summary || (isKidsMode ? 'A fun day full of wonderful memories!' : 'A thoughtful multimodal reflection on your thoughts and experiences.'),
           detectedMood: parsed.detectedMood || mood,
-          moodInsight: parsed.moodInsight || `Your expression resonates with a ${mood} state.`,
-          keyThemes: Array.isArray(parsed.keyThemes) && parsed.keyThemes.length > 0 ? parsed.keyThemes : ['Mindful Reflection', 'Daily Life'],
+          moodInsight: parsed.moodInsight || `You felt ${mood} today!`,
+          keyThemes: Array.isArray(parsed.keyThemes) && parsed.keyThemes.length > 0 ? parsed.keyThemes : ['Creativity', 'My Day'],
           positiveObservations: Array.isArray(parsed.positiveObservations) && parsed.positiveObservations.length > 0
             ? parsed.positiveObservations
-            : ['Honoring your journey with regular reflection fosters profound self-understanding.'],
+            : [isKidsMode ? 'You did such a wonderful job sharing your feelings and creativity!' : 'Honoring your journey with regular reflection fosters profound self-understanding.'],
           reflectionQuestions: Array.isArray(parsed.reflectionQuestions) && parsed.reflectionQuestions.length > 0
             ? parsed.reflectionQuestions
-            : ['What aspect of today feels most meaningful to hold onto?'],
+            : [isKidsMode ? 'What was your favorite part of today?' : 'What aspect of today feels most meaningful to hold onto?'],
           gentleSuggestions: Array.isArray(parsed.gentleSuggestions) && parsed.gentleSuggestions.length > 0
             ? parsed.gentleSuggestions
-            : ['Take a moment to pause and breathe in gratitude for this present moment.'],
+            : [isKidsMode ? 'Keep on drawing and having fun!' : 'Take a moment to pause and breathe in gratitude for this present moment.'],
           language,
           createdAt: new Date().toISOString(),
           modelUsed: 'gemini-3.8-flash',
+          isKidsReflection: isKidsMode,
         };
       }
     } catch (err) {
@@ -184,7 +255,9 @@ ETHICAL & SAFETY GUIDELINES:
     }
   }
 
-  return generateLocalMultimodalFallback(title, content, mood, language, languageName, voiceTranscription, images.length > 0);
+  return isKidsMode
+    ? generateLocalKidsFallback(title, content, mood, language, voiceTranscription, Boolean(drawing), images.length > 0)
+    : generateLocalMultimodalFallback(title, content, mood, language, languageName, voiceTranscription, images.length > 0);
 }
 
 // Translates a journal entry into a target language
@@ -371,3 +444,45 @@ function generateLocalMultimodalFallback(
     modelUsed: 'gemini-3.8-flash (local fallback)',
   };
 }
+
+function generateLocalKidsFallback(
+  title: string,
+  content: string,
+  mood: MoodType,
+  language: string,
+  voiceTranscription?: string,
+  hasDrawing = false,
+  hasImages = false
+): ReflectionData {
+  let friendlyReflection = `It sounds like you had such a special day!`;
+  if (hasDrawing && hasImages) {
+    friendlyReflection = `Wow, your drawing and photos look amazing! It sounds like you had so much fun today. What was your favorite part?`;
+  } else if (hasDrawing) {
+    friendlyReflection = `I love your creative drawing! It sounds like you had a fun day creating art. What was your favorite part of today?`;
+  } else if (hasImages) {
+    friendlyReflection = `Look at those wonderful photos! It sounds like you made great memories today. What made you smile the biggest?`;
+  } else if (voiceTranscription) {
+    friendlyReflection = `It was so nice hearing you talk about your day! It sounds like you had lots of adventures. What made you happiest today?`;
+  } else if (content) {
+    friendlyReflection = `Thank you for writing about your day! It sounds like you had fun. What was the best thing that happened today?`;
+  }
+
+  return {
+    personalReflection: friendlyReflection,
+    summary: `A fun and creative day celebrating your thoughts and feelings!`,
+    detectedMood: `${mood}`,
+    moodInsight: `You felt ${mood} today! It's wonderful to express how you feel.`,
+    keyThemes: ['My Day', 'Fun', 'Creativity'],
+    positiveObservations: [
+      'You did an awesome job expressing your feelings today!',
+      hasDrawing ? 'Your drawing is full of wonderful imagination!' : 'Sharing your thoughts helps you remember great days!',
+    ],
+    reflectionQuestions: ['What was the most fun thing you did today?'],
+    gentleSuggestions: ['Keep smiling, exploring, and drawing!'],
+    language,
+    createdAt: new Date().toISOString(),
+    modelUsed: 'gemini-3.8-flash (kids fallback)',
+    isKidsReflection: true,
+  };
+}
+

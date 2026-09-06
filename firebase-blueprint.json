@@ -57,6 +57,14 @@
           "type": "string",
           "description": "Language code of the journal entry (e.g. en, ta, hi, etc.)"
         },
+        "mode": {
+          "type": "string",
+          "description": "Journaling mode: personal or kids"
+        },
+        "drawing": {
+          "type": "string",
+          "description": "Base64 encoded PNG drawing from canvas"
+        },
         "created_at": {
           "type": "string",
           "description": "Creation timestamp"

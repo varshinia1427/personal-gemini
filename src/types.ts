@@ -1,4 +1,6 @@
-export type MoodType = 'Happy' | 'Calm' | 'Excited' | 'Sad' | 'Angry' | 'Anxious' | 'Tired';
+export type MoodType = 'Happy' | 'Calm' | 'Excited' | 'Sad' | 'Angry' | 'Anxious' | 'Tired' | 'Good' | 'Okay';
+
+export type JournalAppMode = 'personal' | 'kids';
 
 export type LanguageCode =
   | 'en'
@@ -59,6 +61,7 @@ export interface ReflectionData {
   language?: LanguageCode | string;
   createdAt: string;
   modelUsed?: string;
+  isKidsReflection?: boolean;
 }
 
 export interface JournalEntry {
@@ -69,11 +72,22 @@ export interface JournalEntry {
   mood: MoodType;
   is_draft: boolean;
   language: LanguageCode;
+  mode?: JournalAppMode;
+  drawing?: string | null; // Base64 PNG data URL of drawing
   images?: JournalImage[];
   voiceRecording?: VoiceRecording | null;
   reflection?: ReflectionData | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface KidBadge {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  unlocked: boolean;
+  progress?: string;
 }
 
 export interface AuthState {

@@ -15,11 +15,14 @@ import { NewJournalEntry } from './components/NewJournalEntry';
 import { MyJournal } from './components/MyJournal';
 import { EntryDetailModal } from './components/EntryDetailModal';
 import { ProfileSettings } from './components/ProfileSettings';
-import type { JournalEntry, User } from './types';
+import { KidsMyDay } from './components/kids/KidsMyDay';
+import { KidsDashboard } from './components/kids/KidsDashboard';
+import type { JournalEntry, User, JournalAppMode } from './types';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [appMode, setAppMode] = useState<JournalAppMode>('personal');
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -33,6 +36,17 @@ export default function App() {
   const showToast = (text: string, type: 'success' | 'info' | 'error' = 'success') => {
     setGlobalNotice({ text, type });
     setTimeout(() => setGlobalNotice(null), 3500);
+  };
+
+  const handleModeChange = (newMode: JournalAppMode) => {
+    setAppMode(newMode);
+    if (newMode === 'kids') {
+      setCurrentTab('kids-my-day');
+      showToast('Switched to Kids Mode! 🎨🌟', 'info');
+    } else {
+      setCurrentTab('dashboard');
+      showToast('Switched to Personal Journal Mode. 🧘', 'info');
+    }
   };
 
   // Real Firebase Auth listener
@@ -100,7 +114,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen text-slate-100 flex">
+    <div className={`min-h-screen text-slate-100 flex ${appMode === 'kids' ? 'bg-radial-kids' : ''}`}>
       {/* Sidebar Navigation */}
       <Sidebar
         currentTab={currentTab}
@@ -114,12 +128,14 @@ export default function App() {
         onLogout={handleLogout}
         isOpenMobile={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
+        mode={appMode}
+        onToggleMode={handleModeChange}
       />
 
       {/* Main Content Area */}
       <div className="flex-1 md:pl-64 lg:pl-72 flex flex-col min-w-0">
         {/* Mobile Header Bar */}
-        <header className="md:hidden sticky top-0 z-20 bg-slate-900/60 backdrop-blur-xl border-b border-white/10 px-4 h-16 flex items-center justify-between">
+        <header className="md:hidden sticky top-0 z-20 bg-slate-900/70 backdrop-blur-xl border-b border-white/10 px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <button
               id="open-mobile-menu-btn"
@@ -130,19 +146,34 @@ export default function App() {
               <Menu className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-400 to-teal-400 text-slate-900 flex items-center justify-center shadow-xs">
-                <Sparkles className="w-4 h-4" />
+              <div className={`w-8 h-8 rounded-xl flex items-center justify-center shadow-xs ${
+                appMode === 'kids'
+                  ? 'bg-gradient-to-br from-amber-400 via-pink-400 to-indigo-400 text-slate-950 font-black'
+                  : 'bg-gradient-to-br from-indigo-400 to-teal-400 text-slate-900'
+              }`}>
+                {appMode === 'kids' ? <span>🌟</span> : <Sparkles className="w-4 h-4" />}
               </div>
-              <span className="font-medium text-white text-sm truncate">
-                Personal Gemini Journal
+              <span className="font-semibold text-white text-sm truncate">
+                {appMode === 'kids' ? 'Kids Journal' : 'Gemini Journal'}
               </span>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 text-2xs font-semibold px-2.5 py-0.5 rounded-full bg-white/10 text-teal-300 border border-white/15 backdrop-blur-md">
+            <button
+              id="mobile-mode-switcher"
+              type="button"
+              onClick={() => handleModeChange(appMode === 'kids' ? 'personal' : 'kids')}
+              className={`text-2xs font-bold px-2.5 py-1 rounded-full border shadow-sm flex items-center gap-1 transition-all ${
+                appMode === 'kids'
+                  ? 'bg-amber-400/20 text-amber-200 border-amber-300/40'
+                  : 'bg-white/10 text-indigo-300 border-white/15'
+              }`}
+            >
+              <span>{appMode === 'kids' ? '🌟 Kids' : '🧘 Personal'}</span>
+            </button>
+            <span className="inline-flex items-center gap-1 text-2xs font-semibold px-2 py-0.5 rounded-full bg-white/5 text-teal-300 border border-white/10 backdrop-blur-md">
               <Lock className="w-3 h-3 text-teal-400" />
-              <span>Firebase</span>
             </span>
           </div>
         </header>
@@ -163,6 +194,24 @@ export default function App() {
 
         {/* Dynamic Page Views */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+          {/* Kids Mode Views */}
+          {currentTab === 'kids-my-day' && (
+            <KidsMyDay
+              onEntrySaved={(_entry) => {
+                showToast('Hooray! Saved your day to your journal! 🌟', 'success');
+                setCurrentTab('kids-dashboard');
+              }}
+              onNavigateToDashboard={() => setCurrentTab('kids-dashboard')}
+            />
+          )}
+
+          {currentTab === 'kids-dashboard' && (
+            <KidsDashboard
+              onNewDayClick={() => setCurrentTab('kids-my-day')}
+            />
+          )}
+
+          {/* Personal Journal Views */}
           {currentTab === 'dashboard' && (
             <Dashboard
               user={user}

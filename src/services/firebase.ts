@@ -163,7 +163,7 @@ export async function getAuthToken(): Promise<string | null> {
 
 export async function fetchUserEntries(
   userId: string,
-  params?: { search?: string; mood?: string; language?: string; isDraft?: boolean }
+  params?: { search?: string; mood?: string; language?: string; isDraft?: boolean; mode?: string }
 ): Promise<JournalEntry[]> {
   const entriesRef = collection(db, 'users', userId, 'entries');
   const snapshot = await getDocs(entriesRef);
@@ -179,6 +179,8 @@ export async function fetchUserEntries(
       mood: (data.mood as MoodType) || 'Calm',
       is_draft: Boolean(data.is_draft),
       language: (data.language as LanguageCode) || 'en',
+      mode: data.mode || 'personal',
+      drawing: data.drawing || null,
       images: Array.isArray(data.images) ? data.images : [],
       voiceRecording: data.voiceRecording || null,
       reflection: data.reflection || null,
@@ -191,6 +193,10 @@ export async function fetchUserEntries(
   entries.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   // Apply filters
+  if (params?.mode && params.mode !== 'ALL') {
+    entries = entries.filter((e) => (e.mode || 'personal') === params.mode);
+  }
+
   if (params?.mood && params.mood !== 'ALL') {
     entries = entries.filter((e) => e.mood.toLowerCase() === params.mood!.toLowerCase());
   }
@@ -230,6 +236,8 @@ export async function fetchUserEntryById(userId: string, entryId: string): Promi
     mood: (data.mood as MoodType) || 'Calm',
     is_draft: Boolean(data.is_draft),
     language: (data.language as LanguageCode) || 'en',
+    mode: data.mode || 'personal',
+    drawing: data.drawing || null,
     images: Array.isArray(data.images) ? data.images : [],
     voiceRecording: data.voiceRecording || null,
     reflection: data.reflection || null,
@@ -245,6 +253,8 @@ export async function saveUserEntry(
     content: string;
     mood: MoodType;
     language?: LanguageCode;
+    mode?: 'personal' | 'kids';
+    drawing?: string | null;
     images?: JournalImage[];
     voiceRecording?: VoiceRecording | null;
     is_draft?: boolean;
@@ -263,6 +273,8 @@ export async function saveUserEntry(
     content: data.content,
     mood: data.mood,
     language: data.language || 'en',
+    mode: data.mode || 'personal',
+    drawing: data.drawing || null,
     images: data.images || [],
     voiceRecording: data.voiceRecording || null,
     is_draft: Boolean(data.is_draft),
@@ -285,7 +297,7 @@ export async function updateUserEntry(
   data: Partial<
     Pick<
       JournalEntry,
-      'title' | 'content' | 'mood' | 'language' | 'images' | 'voiceRecording' | 'is_draft' | 'created_at' | 'reflection'
+      'title' | 'content' | 'mood' | 'language' | 'mode' | 'drawing' | 'images' | 'voiceRecording' | 'is_draft' | 'created_at' | 'reflection'
     >
   >
 ): Promise<JournalEntry> {
@@ -312,6 +324,8 @@ export async function updateUserEntry(
     content: data.content !== undefined ? data.content : existingData.content,
     mood: data.mood !== undefined ? data.mood : existingData.mood,
     language: data.language !== undefined ? data.language : existingData.language || 'en',
+    mode: data.mode !== undefined ? data.mode : existingData.mode || 'personal',
+    drawing: data.drawing !== undefined ? data.drawing : existingData.drawing || null,
     images: data.images !== undefined ? data.images : existingData.images || [],
     voiceRecording: data.voiceRecording !== undefined ? data.voiceRecording : existingData.voiceRecording || null,
     is_draft: data.is_draft !== undefined ? data.is_draft : existingData.is_draft,
@@ -353,6 +367,8 @@ export async function fetchDashboardStats(userId: string): Promise<DashboardStat
 
   const moodCounts: Record<MoodType, number> = {
     Happy: 0,
+    Good: 0,
+    Okay: 0,
     Calm: 0,
     Excited: 0,
     Sad: 0,
