@@ -24,7 +24,18 @@ import {
   getDocFromServer,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import type { DashboardStats, JournalEntry, MoodType, ReflectionData, User } from '../types';
+import type {
+  DashboardStats,
+  JournalEntry,
+  JournalImage,
+  LanguageCode,
+  MoodTrendPoint,
+  MoodType,
+  ReflectionData,
+  ThemeFrequency,
+  User,
+  VoiceRecording,
+} from '../types';
 
 // Initialize Firebase App
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -70,7 +81,6 @@ export function mapFirebaseUser(fbUser: FirebaseUser): User {
 export async function loginWithGoogle(): Promise<User> {
   const result = await signInWithPopup(auth, googleProvider);
   const user = mapFirebaseUser(result.user);
-  // Store or sync user profile doc
   await setDoc(
     doc(db, 'users', user.id),
     {
@@ -153,7 +163,7 @@ export async function getAuthToken(): Promise<string | null> {
 
 export async function fetchUserEntries(
   userId: string,
-  params?: { search?: string; mood?: string; isDraft?: boolean }
+  params?: { search?: string; mood?: string; language?: string; isDraft?: boolean }
 ): Promise<JournalEntry[]> {
   const entriesRef = collection(db, 'users', userId, 'entries');
   const snapshot = await getDocs(entriesRef);
@@ -168,6 +178,9 @@ export async function fetchUserEntries(
       content: data.content || '',
       mood: (data.mood as MoodType) || 'Calm',
       is_draft: Boolean(data.is_draft),
+      language: (data.language as LanguageCode) || 'en',
+      images: Array.isArray(data.images) ? data.images : [],
+      voiceRecording: data.voiceRecording || null,
       reflection: data.reflection || null,
       created_at: data.created_at || new Date().toISOString(),
       updated_at: data.updated_at || new Date().toISOString(),
@@ -182,6 +195,10 @@ export async function fetchUserEntries(
     entries = entries.filter((e) => e.mood.toLowerCase() === params.mood!.toLowerCase());
   }
 
+  if (params?.language && params.language !== 'ALL') {
+    entries = entries.filter((e) => e.language === params.language);
+  }
+
   if (params?.isDraft !== undefined) {
     entries = entries.filter((e) => e.is_draft === params.isDraft);
   }
@@ -189,7 +206,10 @@ export async function fetchUserEntries(
   if (params?.search && params.search.trim()) {
     const q = params.search.toLowerCase();
     entries = entries.filter(
-      (e) => e.title.toLowerCase().includes(q) || e.content.toLowerCase().includes(q)
+      (e) =>
+        e.title.toLowerCase().includes(q) ||
+        e.content.toLowerCase().includes(q) ||
+        (e.voiceRecording?.transcription && e.voiceRecording.transcription.toLowerCase().includes(q))
     );
   }
 
@@ -209,6 +229,9 @@ export async function fetchUserEntryById(userId: string, entryId: string): Promi
     content: data.content || '',
     mood: (data.mood as MoodType) || 'Calm',
     is_draft: Boolean(data.is_draft),
+    language: (data.language as LanguageCode) || 'en',
+    images: Array.isArray(data.images) ? data.images : [],
+    voiceRecording: data.voiceRecording || null,
     reflection: data.reflection || null,
     created_at: data.created_at || new Date().toISOString(),
     updated_at: data.updated_at || new Date().toISOString(),
@@ -221,6 +244,9 @@ export async function saveUserEntry(
     title: string;
     content: string;
     mood: MoodType;
+    language?: LanguageCode;
+    images?: JournalImage[];
+    voiceRecording?: VoiceRecording | null;
     is_draft?: boolean;
     created_at?: string;
     reflection?: ReflectionData | null;
@@ -236,6 +262,9 @@ export async function saveUserEntry(
     title: data.title.trim() || 'Untitled Entry',
     content: data.content,
     mood: data.mood,
+    language: data.language || 'en',
+    images: data.images || [],
+    voiceRecording: data.voiceRecording || null,
     is_draft: Boolean(data.is_draft),
     created_at: entryCreatedAt,
     updated_at: now,
@@ -253,7 +282,12 @@ export async function saveUserEntry(
 export async function updateUserEntry(
   userId: string,
   entryId: string,
-  data: Partial<Pick<JournalEntry, 'title' | 'content' | 'mood' | 'is_draft' | 'created_at' | 'reflection'>>
+  data: Partial<
+    Pick<
+      JournalEntry,
+      'title' | 'content' | 'mood' | 'language' | 'images' | 'voiceRecording' | 'is_draft' | 'created_at' | 'reflection'
+    >
+  >
 ): Promise<JournalEntry> {
   const entryRef = doc(db, 'users', userId, 'entries', entryId);
   const existingDoc = await getDoc(entryRef);
@@ -277,6 +311,9 @@ export async function updateUserEntry(
     title: data.title !== undefined ? data.title : existingData.title,
     content: data.content !== undefined ? data.content : existingData.content,
     mood: data.mood !== undefined ? data.mood : existingData.mood,
+    language: data.language !== undefined ? data.language : existingData.language || 'en',
+    images: data.images !== undefined ? data.images : existingData.images || [],
+    voiceRecording: data.voiceRecording !== undefined ? data.voiceRecording : existingData.voiceRecording || null,
     is_draft: data.is_draft !== undefined ? data.is_draft : existingData.is_draft,
     created_at: data.created_at !== undefined ? data.created_at : existingData.created_at,
     updated_at: now,
@@ -324,9 +361,25 @@ export async function fetchDashboardStats(userId: string): Promise<DashboardStat
     Tired: 0,
   };
 
+  const entriesByDate: Record<string, number> = {};
+  const themeMap: Record<string, number> = {};
+
   for (const e of entries) {
     if (moodCounts[e.mood] !== undefined) {
       moodCounts[e.mood]++;
+    }
+
+    const dateKey = e.created_at.split('T')[0];
+    entriesByDate[dateKey] = (entriesByDate[dateKey] || 0) + 1;
+
+    // Aggregate themes from AI reflections
+    if (e.reflection?.keyThemes && Array.isArray(e.reflection.keyThemes)) {
+      for (const t of e.reflection.keyThemes) {
+        const cleanTheme = t.trim();
+        if (cleanTheme) {
+          themeMap[cleanTheme] = (themeMap[cleanTheme] || 0) + 1;
+        }
+      }
     }
   }
 
@@ -339,6 +392,21 @@ export async function fetchDashboardStats(userId: string): Promise<DashboardStat
     }
   }
 
+  // Calculate common themes
+  const commonThemes: ThemeFrequency[] = Object.entries(themeMap)
+    .map(([theme, count]) => ({ theme, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+
+  // If no AI themes recorded yet, provide thoughtful defaults
+  if (commonThemes.length === 0 && totalEntries > 0) {
+    commonThemes.push(
+      { theme: 'Mindful Self-Care', count: 1 },
+      { theme: 'Daily Reflection', count: 1 }
+    );
+  }
+
+  // Streak calculation
   const uniqueDays = Array.from(new Set(entries.map((e) => e.created_at.split('T')[0])))
     .sort()
     .reverse();
@@ -365,6 +433,46 @@ export async function fetchDashboardStats(userId: string): Promise<DashboardStat
     }
   }
 
+  // Calculate past 7 days mood trends
+  const moodTrends: MoodTrendPoint[] = [];
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const todayObj = new Date();
+
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(todayObj.getTime() - i * 86400000);
+    const dateStr = d.toISOString().split('T')[0];
+    const dayName = dayNames[d.getDay()];
+
+    const dayEntries = entries.filter((e) => e.created_at.startsWith(dateStr));
+    const dayCount = dayEntries.length;
+    const dayMood = dayCount > 0 ? dayEntries[0].mood : ('Calm' as MoodType);
+
+    moodTrends.push({
+      date: dateStr,
+      dayLabel: dayName,
+      mood: dayMood,
+      count: dayCount,
+    });
+  }
+
+  // Compute weekly & monthly narrative insights
+  const pastWeekEntries = entries.filter((e) => {
+    const diff = (Date.now() - new Date(e.created_at).getTime()) / (1000 * 60 * 60 * 24);
+    return diff <= 7;
+  });
+
+  const weeklyInsights =
+    pastWeekEntries.length > 0
+      ? `Over the past 7 days, you logged ${pastWeekEntries.length} ${
+          pastWeekEntries.length === 1 ? 'entry' : 'entries'
+        }, with a primary tone of ${pastWeekEntries[0].mood.toLowerCase()}. Your writing shows dedicated moments of slowing down to listen inward.`
+      : 'You have not written any entries yet this week. Take 2 minutes today to record your first reflection.';
+
+  const monthlyInsights =
+    totalEntries > 0
+      ? `Across ${totalEntries} total recorded entries, your predominant mood is ${dominantMood || 'Calm'}. You are building a consistent sacred space for emotional self-regulation.`
+      : 'Begin your journaling journey to generate personalized monthly wellness reflections.';
+
   return {
     totalEntries,
     todayEntries,
@@ -372,5 +480,10 @@ export async function fetchDashboardStats(userId: string): Promise<DashboardStat
     moodCounts,
     dominantMood,
     streakDays,
+    weeklyInsights,
+    monthlyInsights,
+    commonThemes,
+    moodTrends,
+    entriesByDate,
   };
 }

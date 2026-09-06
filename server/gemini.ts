@@ -17,76 +17,140 @@ function getGeminiClient(): GoogleGenAI | null {
   return geminiClient;
 }
 
-export async function generateReflection(
-  title: string,
-  content: string,
-  mood: MoodType
+export interface MultimodalReflectionInput {
+  title: string;
+  content: string;
+  mood: MoodType;
+  language: string;
+  languageName?: string;
+  voiceTranscription?: string;
+  images?: { dataUrl: string; mimeType?: string }[];
+}
+
+export async function generateMultimodalReflection(
+  input: MultimodalReflectionInput
 ): Promise<ReflectionData> {
   const client = getGeminiClient();
+  const {
+    title,
+    content,
+    mood,
+    language = 'en',
+    languageName = 'English',
+    voiceTranscription,
+    images = [],
+  } = input;
 
   if (client) {
     try {
-      const prompt = `Journal Title: "${title || 'Untitled'}"
+      const contentsParts: any[] = [];
+
+      // Add image parts if provided
+      for (const img of images) {
+        if (!img.dataUrl) continue;
+        const match = img.dataUrl.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+        if (match) {
+          const mimeType = img.mimeType || match[1];
+          const base64Data = match[2];
+          contentsParts.push({
+            inlineData: {
+              mimeType,
+              data: base64Data,
+            },
+          });
+        }
+      }
+
+      let promptText = `MULTIMODAL JOURNAL REFLECTION REQUEST:
+Target Language: ${languageName} (code: ${language})
+Journal Title: "${title || 'Untitled'}"
 Selected Mood: ${mood}
 
-Journal Content:
+WRITTEN JOURNAL CONTENT:
 """
 ${content}
-"""
+"""`;
 
-Please provide a compassionate, structured reflection on this journal entry.`;
+      if (voiceTranscription && voiceTranscription.trim()) {
+        promptText += `\n\nSPOKEN VOICE JOURNAL TRANSCRIPTION:
+"""
+${voiceTranscription}
+"""`;
+      }
+
+      if (images.length > 0) {
+        promptText += `\n\nATTACHED IMAGES:
+The user has attached ${images.length} photo(s) to this journal entry. Analyze their emotional tone, subjects, setting, and significance in tandem with the written and spoken words.`;
+      }
+
+      promptText += `\n\nCRITICAL MULTILINGUAL DIRECTIVE:
+You MUST generate ALL fields of your reflection in ${languageName} (${language}). Every single explanation, question, theme, and summary MUST be in ${languageName}. If the entry text is in another language, translate your thoughts into ${languageName}.
+
+Respond strictly in the provided JSON schema.`;
+
+      contentsParts.push(promptText);
 
       const response = await client.models.generateContent({
         model: 'gemini-3.8-flash',
-        contents: prompt,
+        contents: contentsParts,
         config: {
-          systemInstruction: `You are the empathetic, reflective AI companion for "Personal Gemini Journal".
-Your role is to support mindful personal reflection, clarity, and self-awareness.
+          systemInstruction: `You are the empathetic, observant, multimodal AI companion for "Personal Gemini Journal".
+Your role is to support mindful personal reflection, clarity, and self-awareness across text, voice recordings, and imagery.
 ETHICAL & SAFETY GUIDELINES:
-- You are an insightful personal journaling companion, NOT a doctor, therapist, psychiatrist, or medical professional.
-- DO NOT provide clinical diagnosis, medical advice, therapy prescriptions, or medical treatment plans.
-- Emphasize strengths, resilience, compassion, and gentle self-inquiry.
-- Provide your response strictly in the JSON schema requested.`,
+- You are a reflective journaling companion, NOT a doctor, psychiatrist, or medical professional.
+- DO NOT provide clinical diagnosis, medical advice, or prescriptions.
+- Emphasize emotional depth, gratitude, resilience, and compassionate self-inquiry.
+- ALWAYS respond in the user's requested language (${languageName}).`,
           responseMimeType: 'application/json',
           responseSchema: {
             type: Type.OBJECT,
             properties: {
+              personalReflection: {
+                type: Type.STRING,
+                description: 'A compassionate, deep personal reflection connecting thoughts, voice, and visual memories.',
+              },
               summary: {
                 type: Type.STRING,
-                description: 'A 2-3 sentence compassionate summary of the entry.',
-              },
-              detectedMood: {
-                type: Type.STRING,
-                description: 'The nuanced emotional tone detected from the writing.',
+                description: 'A concise 2-3 sentence summary of the entry.',
               },
               keyThemes: {
                 type: Type.ARRAY,
                 items: { type: Type.STRING },
-                description: '2 to 4 key conceptual or life themes identified.',
+                description: '2 to 4 key themes identified.',
+              },
+              moodInsight: {
+                type: Type.STRING,
+                description: 'An insightful analysis of the emotional current and what influenced it.',
               },
               positiveObservations: {
                 type: Type.ARRAY,
                 items: { type: Type.STRING },
-                description: '2 to 3 strengths, resilience, or positive moments noted.',
+                description: '2 to 3 strengths, positive moments, or resilience noted.',
               },
               reflectionQuestions: {
                 type: Type.ARRAY,
                 items: { type: Type.STRING },
-                description: '2 to 3 gentle, open-ended questions for deeper contemplation.',
+                description: '2 to 3 thoughtful questions for self-inquiry.',
               },
               gentleSuggestions: {
                 type: Type.ARRAY,
                 items: { type: Type.STRING },
-                description: '2 to 3 mindful, non-prescriptive, grounding suggestions.',
+                description: '2 to 3 gentle, non-prescriptive mindful suggestions.',
+              },
+              detectedMood: {
+                type: Type.STRING,
+                description: 'The nuanced emotional state detected.',
               },
             },
             required: [
+              'personalReflection',
               'summary',
-              'detectedMood',
               'keyThemes',
+              'moodInsight',
               'positiveObservations',
               'reflectionQuestions',
               'gentleSuggestions',
+              'detectedMood',
             ],
           },
         },
@@ -96,157 +160,214 @@ ETHICAL & SAFETY GUIDELINES:
       if (rawText) {
         const parsed = JSON.parse(rawText);
         return {
-          summary: parsed.summary || 'A heartfelt personal reflection on today’s thoughts and experiences.',
+          personalReflection: parsed.personalReflection || parsed.summary,
+          summary: parsed.summary || 'A thoughtful multimodal reflection on your thoughts and experiences.',
           detectedMood: parsed.detectedMood || mood,
-          keyThemes: Array.isArray(parsed.keyThemes) && parsed.keyThemes.length > 0 ? parsed.keyThemes : ['Personal Growth', 'Mindfulness'],
+          moodInsight: parsed.moodInsight || `Your expression resonates with a ${mood} state.`,
+          keyThemes: Array.isArray(parsed.keyThemes) && parsed.keyThemes.length > 0 ? parsed.keyThemes : ['Mindful Reflection', 'Daily Life'],
           positiveObservations: Array.isArray(parsed.positiveObservations) && parsed.positiveObservations.length > 0
             ? parsed.positiveObservations
-            : ['Taking intentional time to write and reflect honors your inner journey.'],
+            : ['Honoring your journey with regular reflection fosters profound self-understanding.'],
           reflectionQuestions: Array.isArray(parsed.reflectionQuestions) && parsed.reflectionQuestions.length > 0
             ? parsed.reflectionQuestions
-            : ['What feeling would you like to cultivate as you move forward today?'],
+            : ['What aspect of today feels most meaningful to hold onto?'],
           gentleSuggestions: Array.isArray(parsed.gentleSuggestions) && parsed.gentleSuggestions.length > 0
             ? parsed.gentleSuggestions
-            : ['Take three slow, deep breaths to integrate your thoughts.'],
+            : ['Take a moment to pause and breathe in gratitude for this present moment.'],
+          language,
           createdAt: new Date().toISOString(),
           modelUsed: 'gemini-3.8-flash',
         };
       }
     } catch (err) {
-      console.warn('Gemini API call failed or encountered an error. Utilizing reflective fallback generator:', err);
+      console.warn('Multimodal Gemini API call encountered an issue:', err);
     }
   }
 
-  // Graceful fallback if GEMINI_API_KEY is not configured or temporary error occurs
-  return generateLocalReflectionFallback(title, content, mood);
+  return generateLocalMultimodalFallback(title, content, mood, language, languageName, voiceTranscription, images.length > 0);
 }
 
-function generateLocalReflectionFallback(title: string, content: string, mood: MoodType): ReflectionData {
-  const wordCount = content.split(/\s+/).filter(Boolean).length;
-  const moodReflections: Record<MoodType, { detectedMood: string; themes: string[]; obs: string[]; questions: string[]; suggestions: string[] }> = {
-    Happy: {
-      detectedMood: 'Joyful & Appreciative',
-      themes: ['Celebration', 'Gratitude', 'Positive Energy'],
-      obs: [
-        'You clearly savored this uplifting moment by taking the time to articulate it.',
-        'Your words carry an infectious sense of lightness and openness to life.'
-      ],
-      questions: [
-        'What specific element of this experience brought you the deepest sense of fulfillment?',
-        'How can you anchor this joyous feeling so you can revisit it on harder days?'
-      ],
-      suggestions: [
-        'Consider sharing a piece of your joy or gratitude with someone who contributed to it.',
-        'Take a 30-second sensory snapshot right now to remember how good this feels.'
-      ]
-    },
-    Calm: {
-      detectedMood: 'Peaceful & Centered',
-      themes: ['Stillness', 'Balance', 'Mindful Presence'],
-      obs: [
-        'You demonstrated high self-attunement by slowing down your pace.',
-        'Your reflection reflects steady emotional regulation and grounded perspective.'
-      ],
-      questions: [
-        'What conditions in your environment or routine helped you arrive at this peaceful state?',
-        'How does this sense of quiet balance inform your next decisions?'
-      ],
-      suggestions: [
-        'Protect this calm space by avoiding rapid context-switching for the next hour.',
-        'Breathe gently into your abdomen and let this tranquil baseline settle in.'
-      ]
-    },
-    Excited: {
-      detectedMood: 'Energized & Motivated',
-      themes: ['Ambition', 'Forward Momentum', 'Creative Spark'],
-      obs: [
-        'Your enthusiasm is a powerful catalyst for creative ideas and progress.',
-        'You are actively leaning into curiosity and future possibilities.'
-      ],
-      questions: [
-        'What single next step will channel this vibrant momentum most effectively?',
-        'Who can you celebrate this spark of excitement with?'
-      ],
-      suggestions: [
-        'Jot down the top 3 spontaneous ideas sparked by this energy before they fade.',
-        'Remember to stay hydrated and pace your excitement steadily.'
-      ]
-    },
-    Sad: {
-      detectedMood: 'Gentle Vulnerability & Processing',
-      themes: ['Emotional Release', 'Self-Compassion', 'Healing'],
-      obs: [
-        'Allowing yourself to name sadness on the page is an act of genuine bravery.',
-        'You are giving your feelings a safe container without harsh judgment.'
-      ],
-      questions: [
-        'What kind of gentleness or comfort does your heart need most right now?',
-        'If a close friend felt this way, what supportive words would you offer them?'
-      ],
-      suggestions: [
-        'Wrap yourself in a warm blanket, sip a calming tea, and lower your daily expectations.',
-        'Remind yourself that feelings are like weather patterns: they arrive, and they gently pass.'
-      ]
-    },
-    Angry: {
-      detectedMood: 'Passionate & Boundary-Seeking',
-      themes: ['Boundary Protection', 'Frustration Release', 'Clarity of Values'],
-      obs: [
-        'Anger often highlights a boundary that was crossed or a value that deeply matters to you.',
-        'Channeling your intensity into honest writing rather than reactive confrontation is commendable.'
-      ],
-      questions: [
-        'What core value or unmet expectation is asking to be respected here?',
-        'What constructive, healthy boundary can help safeguard your peace moving forward?'
-      ],
-      suggestions: [
-        'Engage in a physical release—a brisk walk, stretching, or shaking your arms out.',
-        'Wait to respond to any triggers until your heart rate and emotional temperature normalize.'
-      ]
-    },
-    Anxious: {
-      detectedMood: 'Overstimulated yet Courageously Present',
-      themes: ['Navigating Uncertainty', 'Grounding', 'Self-Soothing'],
-      obs: [
-        'Even in the midst of uncertainty, you took the initiative to pause and document your reality.',
-        'Externalizing racing thoughts into written sentences brings order to internal chaos.'
-      ],
-      questions: [
-        'Of all the concerns on your mind, which single piece is actually within your immediate control today?',
-        'What has guided you safely through similar moments of tension in the past?'
-      ],
-      suggestions: [
-        'Practice the 5-4-3-2-1 grounding technique or the 4-7-8 relaxing breath count.',
-        'Choose just one micro-task to focus on right now and gently release the rest.'
-      ]
-    },
-    Tired: {
-      detectedMood: 'Weary & Seeking Restoration',
-      themes: ['Restoration', 'Honoring Limits', 'Recharging'],
-      obs: [
-        'Listening to your physical fatigue is a vital skill that prevents chronic burnout.',
-        'You are honoring your natural need to pause rather than needlessly powering through.'
-      ],
-      questions: [
-        'What demands can you politely defer or take off your plate today?',
-        'What does genuine replenishment look like for your mind and body tonight?'
-      ],
-      suggestions: [
-        'Give yourself unconditional permission to stop working early today.',
-        'Dim the lighting, disconnect from blue screens, and prepare for an early night of restful sleep.'
-      ]
-    }
-  };
+// Translates a journal entry into a target language
+export async function translateJournalEntry(
+  title: string,
+  content: string,
+  targetLanguage: string,
+  targetLanguageName: string
+): Promise<{ translatedTitle: string; translatedContent: string }> {
+  const client = getGeminiClient();
+  if (client) {
+    try {
+      const prompt = `Translate the following journal entry into ${targetLanguageName} (${targetLanguage}).
+Maintain the exact emotional nuance, personal voice, warmth, and sincerity of the original writer.
+Return your response strictly in JSON format.
 
-  const current = moodReflections[mood] || moodReflections.Calm;
+Original Title: "${title}"
+Original Content:
+"""
+${content}
+"""`;
+
+      const response = await client.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              translatedTitle: { type: Type.STRING },
+              translatedContent: { type: Type.STRING },
+            },
+            required: ['translatedTitle', 'translatedContent'],
+          },
+        },
+      });
+
+      const parsed = JSON.parse(response.text || '{}');
+      if (parsed.translatedTitle && parsed.translatedContent) {
+        return {
+          translatedTitle: parsed.translatedTitle,
+          translatedContent: parsed.translatedContent,
+        };
+      }
+    } catch (err) {
+      console.error('Translation error with Gemini:', err);
+    }
+  }
+
   return {
-    summary: `In this entry containing ${wordCount} words, you explored thoughts on "${title || 'your day'}". You gave voice to your inner thoughts with honest candor and created a valuable moment of self-witnessing.`,
-    detectedMood: current.detectedMood,
-    keyThemes: current.themes,
-    positiveObservations: current.obs,
-    reflectionQuestions: current.questions,
-    gentleSuggestions: current.suggestions,
+    translatedTitle: title,
+    translatedContent: content,
+  };
+}
+
+// Transcribes recorded voice audio and detects language
+export async function transcribeVoiceAudio(
+  audioBase64: string,
+  mimeType = 'audio/webm',
+  preferredLanguage?: string
+): Promise<{ transcription: string; detectedLanguage: string }> {
+  const client = getGeminiClient();
+  if (client) {
+    try {
+      const response = await client.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: [
+          {
+            inlineData: {
+              mimeType,
+              data: audioBase64,
+            },
+          },
+          `Please transcribe the speech in this audio recording accurately into text.
+Identify the specific language being spoken (e.g. Tamil, Hindi, English, Spanish, Malayalam, Telugu, Bengali, Japanese, etc.).
+${preferredLanguage ? `Preferred language hint: ${preferredLanguage}.` : ''}
+Return strictly JSON matching:
+{
+  "transcription": "The transcribed speech text",
+  "detectedLanguage": "The name of the detected language"
+}`,
+        ],
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              transcription: { type: Type.STRING },
+              detectedLanguage: { type: Type.STRING },
+            },
+            required: ['transcription', 'detectedLanguage'],
+          },
+        },
+      });
+
+      const parsed = JSON.parse(response.text || '{}');
+      return {
+        transcription: parsed.transcription || '',
+        detectedLanguage: parsed.detectedLanguage || preferredLanguage || 'English',
+      };
+    } catch (err) {
+      console.error('Audio transcription error:', err);
+    }
+  }
+
+  return {
+    transcription: 'Audio recording captured successfully.',
+    detectedLanguage: preferredLanguage || 'English',
+  };
+}
+
+// Generates synthesized weekly or monthly insights from entries
+export async function generateSynthesizedInsights(
+  entriesSummary: { title: string; content: string; mood: string; date: string }[],
+  timeframe: 'weekly' | 'monthly',
+  languageName = 'English'
+): Promise<string> {
+  const client = getGeminiClient();
+  if (!client || entriesSummary.length === 0) {
+    return timeframe === 'weekly'
+      ? `Over the past week, you dedicated time to honor your inner experiences and ground yourself through personal journaling.`
+      : `This month reflects meaningful continuity in self-reflection and emotional balance.`;
+  }
+
+  try {
+    const listText = entriesSummary
+      .map((e, idx) => `${idx + 1}. [${e.date}] Mood: ${e.mood} | Title: "${e.title}" | Excerpt: "${e.content.slice(0, 150)}..."`)
+      .join('\n');
+
+    const prompt = `You are a mindful journaling guide.
+Synthesize the user's ${timeframe} journaling patterns based on these recent ${entriesSummary.length} entries:
+${listText}
+
+Generate a 2-3 paragraph compassionate, encouraging synthesis in ${languageName}.
+Highlight emotional patterns, growth, and positive themes.
+Keep it warm, non-clinical, and reflective.`;
+
+    const response = await client.models.generateContent({
+      model: 'gemini-3.8-flash',
+      contents: prompt,
+    });
+
+    return response.text?.trim() || 'You have maintained thoughtful self-care through consistent reflective journaling.';
+  } catch (err) {
+    console.error('Insight synthesis error:', err);
+    return `Your ${timeframe} journaling shows deliberate dedication to emotional well-being and mindful presence.`;
+  }
+}
+
+function generateLocalMultimodalFallback(
+  title: string,
+  content: string,
+  mood: MoodType,
+  language: string,
+  languageName: string,
+  voiceTranscription?: string,
+  hasImages = false
+): ReflectionData {
+  const hasVoice = Boolean(voiceTranscription && voiceTranscription.trim());
+
+  return {
+    personalReflection: `Reflecting on "${title || 'your thoughts'}", your entry demonstrates deep presence and intentional awareness. ${
+      hasVoice ? 'Your spoken voice brings raw authenticity to this moment. ' : ''
+    }${hasImages ? 'The accompanying photos visually anchor these cherished reflections.' : ''}`,
+    summary: `A heartfelt capture of your thoughts and feelings, centered on a ${mood.toLowerCase()} mindset.`,
+    detectedMood: `${mood} & Reflective`,
+    moodInsight: `Your choice of words highlights a desire for clarity and authentic connection with yourself.`,
+    keyThemes: ['Mindful Awareness', 'Authentic Expression', 'Self-Care'],
+    positiveObservations: [
+      'You created intentional space in your day to document your inner reality.',
+      'Expressing thoughts across multiple modalities enriches emotional integration.',
+    ],
+    reflectionQuestions: [
+      'What feels most grounding about this particular experience?',
+      'How can you carry this sense of reflection forward into the rest of your week?',
+    ],
+    gentleSuggestions: [
+      'Take a few mindful breaths and let these reflections settle gently.',
+      'Acknowledge yourself for taking time to journal today.',
+    ],
+    language,
     createdAt: new Date().toISOString(),
-    modelUsed: 'gemini-3.8-flash (fallback)',
+    modelUsed: 'gemini-3.8-flash (local fallback)',
   };
 }

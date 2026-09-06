@@ -15,7 +15,17 @@ import {
   clearAllUserEntries,
   fetchDashboardStats,
 } from './firebase';
-import type { DashboardStats, JournalEntry, MoodType, ReflectionData, User } from '../types';
+import { getLanguageOption } from '../utils/languages';
+import type {
+  DashboardStats,
+  JournalEntry,
+  JournalImage,
+  LanguageCode,
+  MoodType,
+  ReflectionData,
+  User,
+  VoiceRecording,
+} from '../types';
 
 export function getStoredToken(): string | null {
   return auth.currentUser ? 'authenticated' : null;
@@ -91,6 +101,7 @@ function requireAuthenticatedUid(): string {
 export async function apiGetEntries(params?: {
   search?: string;
   mood?: string;
+  language?: string;
   isDraft?: boolean;
 }): Promise<{ entries: JournalEntry[] }> {
   const uid = requireAuthenticatedUid();
@@ -111,6 +122,9 @@ export async function apiCreateEntry(data: {
   title: string;
   content: string;
   mood: MoodType;
+  language?: LanguageCode;
+  images?: JournalImage[];
+  voiceRecording?: VoiceRecording | null;
   is_draft?: boolean;
   created_at?: string;
   reflection?: ReflectionData | null;
@@ -125,7 +139,12 @@ export async function apiCreateEntry(data: {
 
 export async function apiUpdateEntry(
   id: string,
-  data: Partial<Pick<JournalEntry, 'title' | 'content' | 'mood' | 'is_draft' | 'created_at' | 'reflection'>>
+  data: Partial<
+    Pick<
+      JournalEntry,
+      'title' | 'content' | 'mood' | 'language' | 'images' | 'voiceRecording' | 'is_draft' | 'created_at' | 'reflection'
+    >
+  >
 ): Promise<{ entry: JournalEntry; message: string }> {
   const uid = requireAuthenticatedUid();
   const entry = await updateUserEntry(uid, id, data);
@@ -142,14 +161,17 @@ export async function apiDeleteEntry(id: string): Promise<{ message: string }> {
 }
 
 // ----------------------------------------------------
-// GEMINI AI REFLECTION API (SERVER-SIDE)
+// GEMINI MULTIMODAL & MULTILINGUAL AI APIs (SERVER-SIDE)
 // ----------------------------------------------------
 
-export async function apiReflectDraft(
-  title: string,
-  content: string,
-  mood: MoodType
-): Promise<{ reflection: ReflectionData }> {
+export async function apiReflectDraft(params: {
+  title: string;
+  content: string;
+  mood: MoodType;
+  language?: LanguageCode;
+  voiceTranscription?: string;
+  images?: JournalImage[];
+}): Promise<{ reflection: ReflectionData }> {
   const token = await getAuthToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -158,10 +180,22 @@ export async function apiReflectDraft(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  const langOption = getLanguageOption(params.language || 'en');
+
   const res = await fetch('/api/reflect', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ title, content, mood }),
+    body: JSON.stringify({
+      title: params.title,
+      content: params.content,
+      mood: params.mood,
+      language: langOption.code,
+      languageName: `${langOption.name} (${langOption.nativeName})`,
+      voiceTranscription: params.voiceTranscription || '',
+      images: (params.images || []).map((img) => ({
+        dataUrl: img.dataUrl,
+      })),
+    }),
   });
 
   const data = await res.json();
@@ -180,7 +214,15 @@ export async function apiReflectSavedEntry(
     throw new Error('Entry not found.');
   }
 
-  const { reflection } = await apiReflectDraft(existing.title, existing.content, existing.mood);
+  const { reflection } = await apiReflectDraft({
+    title: existing.title,
+    content: existing.content,
+    mood: existing.mood,
+    language: existing.language,
+    voiceTranscription: existing.voiceRecording?.transcription,
+    images: existing.images,
+  });
+
   const updatedEntry = await updateUserEntry(uid, entryId, { reflection });
 
   return {
@@ -188,6 +230,77 @@ export async function apiReflectSavedEntry(
     entry: updatedEntry,
     message: 'Gemini AI reflection generated and saved.',
   };
+}
+
+export async function apiTranslateEntry(
+  entryId: string,
+  targetLanguage: LanguageCode
+): Promise<{ entry: JournalEntry; translatedTitle: string; translatedContent: string }> {
+  const uid = requireAuthenticatedUid();
+  const existing = await fetchUserEntryById(uid, entryId);
+  if (!existing) {
+    throw new Error('Entry not found.');
+  }
+
+  const token = await getAuthToken();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const langOption = getLanguageOption(targetLanguage);
+
+  const res = await fetch('/api/translate', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      title: existing.title,
+      content: existing.content,
+      targetLanguage,
+      targetLanguageName: `${langOption.name} (${langOption.nativeName})`,
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || 'Translation failed.');
+  }
+
+  const updatedEntry = await updateUserEntry(uid, entryId, {
+    title: data.translatedTitle || existing.title,
+    content: data.translatedContent || existing.content,
+    language: targetLanguage,
+  });
+
+  return {
+    entry: updatedEntry,
+    translatedTitle: data.translatedTitle,
+    translatedContent: data.translatedContent,
+  };
+}
+
+export async function apiTranscribeAudio(
+  audioBase64: string,
+  mimeType = 'audio/webm',
+  preferredLanguage?: string
+): Promise<{ transcription: string; detectedLanguage: string }> {
+  const token = await getAuthToken();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch('/api/transcribe-audio', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      audioBase64,
+      mimeType,
+      preferredLanguage,
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to transcribe audio.');
+  }
+  return data;
 }
 
 // ----------------------------------------------------

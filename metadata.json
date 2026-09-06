@@ -1,6 +1,6 @@
 {
   "name": "Personal Gemini Journal",
   "description": "Your thoughts. Your journal. Your AI reflection — privately. A private, secure full-stack journal with server-side AI reflections powered by Gemini.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

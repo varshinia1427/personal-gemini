@@ -26,7 +26,7 @@
     },
     "JournalEntry": {
       "title": "JournalEntry",
-      "description": "Private journal entry with optional Gemini AI reflection",
+      "description": "Multimodal, multilingual private journal entry with voice, images, and Gemini reflection",
       "type": "object",
       "properties": {
         "id": {
@@ -53,6 +53,10 @@
           "type": "boolean",
           "description": "Whether the entry is a draft"
         },
+        "language": {
+          "type": "string",
+          "description": "Language code of the journal entry (e.g. en, ta, hi, etc.)"
+        },
         "created_at": {
           "type": "string",
           "description": "Creation timestamp"
@@ -72,7 +76,7 @@
     },
     "/users/{userId}/entries/{entryId}": {
       "schema": "JournalEntry",
-      "description": "Private journal entries scoped strictly to the authenticated user"
+      "description": "Multimodal private journal entries scoped strictly to the authenticated user"
     }
   }
 }
