@@ -6,7 +6,8 @@ import {
   CheckCircle2, 
   AlertCircle 
 } from 'lucide-react';
-import { apiGetMe, apiLogout, getStoredToken } from './services/api';
+import { apiLogout } from './services/api';
+import { subscribeToAuth } from './services/firebase';
 import { Sidebar, NavTab } from './components/Sidebar';
 import { LandingPage } from './components/LandingPage';
 import { Dashboard } from './components/Dashboard';
@@ -34,27 +35,16 @@ export default function App() {
     setTimeout(() => setGlobalNotice(null), 3500);
   };
 
-  // Check auth session on startup
+  // Real Firebase Auth listener
   useEffect(() => {
-    const checkAuth = async () => {
-      const token = getStoredToken();
-      if (!token) {
-        setIsLoadingAuth(false);
-        return;
-      }
+    const unsubscribe = subscribeToAuth((authUser) => {
+      setUser(authUser);
+      setIsLoadingAuth(false);
+    });
 
-      try {
-        const res = await apiGetMe();
-        setUser(res.user);
-      } catch (err) {
-        console.warn('Session verification failed, logging out:', err);
-        setUser(null);
-      } finally {
-        setIsLoadingAuth(false);
-      }
+    return () => {
+      unsubscribe();
     };
-
-    checkAuth();
   }, []);
 
   const handleLoginSuccess = (authenticatedUser: User) => {
@@ -75,9 +65,9 @@ export default function App() {
     }
   };
 
-  const handleEntrySaved = (savedEntry: JournalEntry) => {
+  const handleEntrySaved = (_savedEntry: JournalEntry) => {
     setEditingEntry(null);
-    showToast('Journal entry saved securely.', 'success');
+    showToast('Journal entry saved securely to Firestore.', 'success');
     setCurrentTab('my-journal');
   };
 
@@ -97,7 +87,7 @@ export default function App() {
           </div>
           <div>
             <h1 className="font-medium text-white text-base">Personal Gemini Journal</h1>
-            <p className="text-xs text-slate-400 font-light mt-1">Verifying private encryption session...</p>
+            <p className="text-xs text-slate-400 font-light mt-1">Connecting to Firebase Authentication...</p>
           </div>
         </div>
       </div>
@@ -152,7 +142,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1 text-2xs font-semibold px-2.5 py-0.5 rounded-full bg-white/10 text-teal-300 border border-white/15 backdrop-blur-md">
               <Lock className="w-3 h-3 text-teal-400" />
-              <span>Private</span>
+              <span>Firebase</span>
             </span>
           </div>
         </header>
@@ -212,7 +202,7 @@ export default function App() {
               user={user}
               onLogout={handleLogout}
               onEntriesCleared={() => {
-                showToast('All journal entries have been cleared.', 'info');
+                showToast('All journal entries have been cleared from Firestore.', 'info');
               }}
             />
           )}
@@ -225,7 +215,7 @@ export default function App() {
           entry={viewingEntry}
           onClose={() => setViewingEntry(null)}
           onEdit={handleStartEdit}
-          onDelete={(entry) => {
+          onDelete={(_entry) => {
             setViewingEntry(null);
             setCurrentTab('my-journal');
           }}

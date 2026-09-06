@@ -8,13 +8,13 @@ import {
   BookHeart, 
   Eye, 
   EyeOff,
-  Sparkle
+  CheckCircle2
 } from 'lucide-react';
-import { apiLogin, apiSignup, apiDemoLogin } from '../services/api';
+import { apiLogin, apiSignup, apiLoginWithGoogle } from '../services/api';
 import type { User } from '../types';
 
 interface LandingPageProps {
-  onLoginSuccess: (user: User, token: string) => void;
+  onLoginSuccess: (user: User) => void;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
@@ -24,8 +24,28 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
   const [name, setName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [demoLoading, setDemoLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const formatFirebaseError = (err: any): string => {
+    const msg = err.message || '';
+    if (msg.includes('auth/invalid-credential') || msg.includes('auth/wrong-password') || msg.includes('auth/user-not-found')) {
+      return 'Invalid email or password. Please check your credentials and try again.';
+    }
+    if (msg.includes('auth/email-already-in-use')) {
+      return 'An account with this email already exists. Please sign in instead.';
+    }
+    if (msg.includes('auth/weak-password')) {
+      return 'Password should be at least 6 characters.';
+    }
+    if (msg.includes('auth/invalid-email')) {
+      return 'Please enter a valid email address.';
+    }
+    if (msg.includes('auth/popup-closed-by-user')) {
+      return 'Google Sign-In was cancelled.';
+    }
+    return msg || 'Authentication failed. Please try again.';
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,31 +61,31 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
           throw new Error('Password must be at least 6 characters long.');
         }
         const res = await apiSignup(email, password, name);
-        onLoginSuccess(res.user, res.token);
+        onLoginSuccess(res.user);
       } else {
         if (!email.trim() || !password.trim()) {
           throw new Error('Please enter your email and password.');
         }
         const res = await apiLogin(email, password);
-        onLoginSuccess(res.user, res.token);
+        onLoginSuccess(res.user);
       }
     } catch (err: any) {
-      setError(err.message || 'Authentication failed. Please check your credentials.');
+      setError(formatFirebaseError(err));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDemoLogin = async () => {
+  const handleGoogleSignIn = async () => {
     setError(null);
-    setDemoLoading(true);
+    setGoogleLoading(true);
     try {
-      const res = await apiDemoLogin();
-      onLoginSuccess(res.user, res.token);
+      const res = await apiLoginWithGoogle();
+      onLoginSuccess(res.user);
     } catch (err: any) {
-      setError('Unable to launch demo account. Please try registering an account.');
+      setError(formatFirebaseError(err));
     } finally {
-      setDemoLoading(false);
+      setGoogleLoading(false);
     }
   };
 
@@ -86,15 +106,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
           </div>
 
           <div className="flex items-center gap-3">
-            <button
-              id="header-demo-login-btn"
-              onClick={handleDemoLogin}
-              disabled={demoLoading}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium text-white bg-white/10 border border-white/15 hover:bg-white/20 transition-all backdrop-blur-md cursor-pointer"
-            >
-              <Sparkle className="w-3.5 h-3.5 text-teal-300" />
-              <span>{demoLoading ? 'Launching Demo...' : 'Instant Demo Login'}</span>
-            </button>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium text-teal-300 bg-white/5 border border-white/10 backdrop-blur-md">
+              <ShieldCheck className="w-3.5 h-3.5 text-teal-400" />
+              <span>Firebase Auth Protected</span>
+            </span>
           </div>
         </div>
       </header>
@@ -105,7 +120,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
         <div className="lg:w-7/12 space-y-8">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-medium text-indigo-300 backdrop-blur-md">
             <Lock className="w-3.5 h-3.5 text-teal-400" />
-            <span>Server-Enforced Data Isolation & Privacy</span>
+            <span>Secure Cloud Firestore & Real Firebase Authentication</span>
           </div>
 
           <div className="space-y-4">
@@ -136,19 +151,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
               <div className="w-9 h-9 rounded-2xl bg-teal-500/15 text-teal-300 flex items-center justify-center mb-3">
                 <ShieldCheck className="w-4 h-4" />
               </div>
-              <h3 className="font-medium text-white text-sm">Server-Side Security</h3>
+              <h3 className="font-medium text-white text-sm">Strict Zero-Trust Privacy</h3>
               <p className="text-xs text-slate-300 font-light mt-1.5 leading-relaxed">
-                Every entry is strictly isolated by user ID on the backend. Gemini credentials never touch the browser.
+                Every entry is strictly isolated to your authenticated Firebase UID. Zero unauthenticated access or cross-user visibility.
               </p>
             </div>
           </div>
 
-          {/* Ideathon Highlight Note */}
+          {/* Privacy Note */}
           <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md text-xs text-slate-300 flex items-start gap-3">
             <BookHeart className="w-4 h-4 text-teal-400 shrink-0 mt-0.5" />
             <div className="font-light">
-              <span className="font-medium text-white">Designed for Mindful Wellness:</span>{' '}
-              Includes pre-loaded sample entries for demo review, or you can register your own private account to start fresh.
+              <span className="font-medium text-white">Your Personal Sanctuary:</span>{' '}
+              Sign in with your Google account or email to access your private, encrypted journal stored securely in Cloud Firestore.
             </div>
           </div>
         </div>
@@ -197,98 +212,111 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {isSignUp && (
+            {/* Google Sign-In Button */}
+            <div className="space-y-4">
+              <button
+                type="button"
+                id="google-signin-btn"
+                onClick={handleGoogleSignIn}
+                disabled={googleLoading || loading}
+                className="w-full py-3.5 px-4 rounded-full border border-white/15 bg-white/10 hover:bg-white/15 text-white font-medium text-xs sm:text-sm transition-all flex items-center justify-center gap-3 cursor-pointer backdrop-blur-md shadow-sm disabled:opacity-60"
+              >
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                  <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z" />
+                  <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z" />
+                  <path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.8s.2-2.1.4-2.8L1.9 6.3C.7 8.7 0 10.3 0 12s.7 3.3 1.9 5.7l3.7-2.9z" />
+                  <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.4-6.4-5.2L1.9 16C3.7 19.7 7.5 23 12 23z" />
+                </svg>
+                <span>{googleLoading ? 'Connecting with Google...' : 'Continue with Google'}</span>
+              </button>
+
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-white/10" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-slate-900/90 px-3 text-slate-400 rounded-full border border-white/5">
+                    or continue with email
+                  </span>
+                </div>
+              </div>
+
+              {/* Email & Password Form */}
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {isSignUp && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5" htmlFor="auth-name">
+                      Full Name (Optional)
+                    </label>
+                    <input
+                      id="auth-name"
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="E.g., Alex Johnson"
+                      className="w-full px-4 py-3 rounded-2xl border border-white/10 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 bg-white/5 backdrop-blur-md"
+                    />
+                  </div>
+                )}
+
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5" htmlFor="auth-name">
-                    Full Name (Optional)
+                  <label className="block text-xs font-medium text-slate-300 mb-1.5" htmlFor="auth-email">
+                    Email Address
                   </label>
                   <input
-                    id="auth-name"
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="E.g., Alex Johnson"
+                    id="auth-email"
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="your.email@example.com"
                     className="w-full px-4 py-3 rounded-2xl border border-white/10 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 bg-white/5 backdrop-blur-md"
                   />
                 </div>
-              )}
 
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5" htmlFor="auth-email">
-                  Email Address
-                </label>
-                <input
-                  id="auth-email"
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="your.email@example.com"
-                  className="w-full px-4 py-3 rounded-2xl border border-white/10 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 bg-white/5 backdrop-blur-md"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5" htmlFor="auth-password">
-                  Password
-                </label>
-                <div className="relative">
-                  <input
-                    id="auth-password"
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={isSignUp ? 'Minimum 6 characters' : 'Enter your password'}
-                    className="w-full px-4 py-3 pr-11 rounded-2xl border border-white/10 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 bg-white/5 backdrop-blur-md"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 cursor-pointer"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1.5" htmlFor="auth-password">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="auth-password"
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={isSignUp ? 'Minimum 6 characters' : 'Enter your password'}
+                      className="w-full px-4 py-3 pr-11 rounded-2xl border border-white/10 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 bg-white/5 backdrop-blur-md"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 cursor-pointer"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              <button
-                type="submit"
-                id="auth-submit-btn"
-                disabled={loading}
-                className="w-full mt-2 py-3.5 px-4 rounded-full bg-indigo-500 hover:bg-indigo-400 text-white font-medium text-sm transition-all shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70"
-              >
-                <span>{loading ? 'Authenticating...' : isSignUp ? 'Create Private Journal' : 'Sign In to Journal'}</span>
-                {!loading && <ArrowRight className="w-4 h-4" />}
-              </button>
-            </form>
-
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-white/10" />
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="bg-slate-900/80 px-3 text-slate-400 rounded-full border border-white/5">or explore immediately</span>
-              </div>
+                <button
+                  type="submit"
+                  id="auth-submit-btn"
+                  disabled={loading || googleLoading}
+                  className="w-full mt-2 py-3.5 px-4 rounded-full bg-indigo-500 hover:bg-indigo-400 text-white font-medium text-sm transition-all shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70"
+                >
+                  <span>
+                    {loading ? 'Authenticating...' : isSignUp ? 'Create Private Journal' : 'Sign In to Journal'}
+                  </span>
+                  {!loading && <ArrowRight className="w-4 h-4" />}
+                </button>
+              </form>
             </div>
 
-            {/* Quick Demo Access */}
-            <button
-              type="button"
-              id="auth-demo-account-btn"
-              onClick={handleDemoLogin}
-              disabled={demoLoading}
-              className="w-full py-3 px-4 rounded-full border border-white/15 bg-white/10 hover:bg-white/15 text-white font-medium text-xs transition-all flex items-center justify-center gap-2 cursor-pointer backdrop-blur-md"
-            >
-              <Sparkles className="w-4 h-4 text-teal-300" />
-              <span>{demoLoading ? 'Logging into Demo...' : 'One-Click Demo Account (Ideathon Review)'}</span>
-            </button>
-
             <div className="mt-5 pt-4 border-t border-white/10 text-center">
-              <p className="text-2xs text-slate-400 font-light">
-                Data isolation active • Passwords securely hashed • Private session storage
+              <p className="text-2xs text-slate-400 font-light flex items-center justify-center gap-1.5">
+                <CheckCircle2 className="w-3 h-3 text-teal-400" />
+                <span>Protected by Firebase Authentication & Cloud Firestore rules</span>
               </p>
             </div>
           </div>
@@ -304,7 +332,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
           <div className="flex items-center gap-4 text-slate-400 font-light">
             <span>Server-side Gemini 3.8 Flash</span>
             <span>•</span>
-            <span>Non-medical mindful reflection</span>
+            <span>Zero-trust Firebase isolation</span>
           </div>
         </div>
       </footer>

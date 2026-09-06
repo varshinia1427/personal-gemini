@@ -1,0 +1,78 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account profile details",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Firebase user UID"
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address"
+        },
+        "name": {
+          "type": "string",
+          "description": "User display name"
+        },
+        "created_at": {
+          "type": "string",
+          "description": "Account creation ISO timestamp"
+        }
+      },
+      "required": ["id", "email"]
+    },
+    "JournalEntry": {
+      "title": "JournalEntry",
+      "description": "Private journal entry with optional Gemini AI reflection",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique entry identifier"
+        },
+        "user_id": {
+          "type": "string",
+          "description": "Owner Firebase UID"
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the journal entry"
+        },
+        "content": {
+          "type": "string",
+          "description": "Journal text body"
+        },
+        "mood": {
+          "type": "string",
+          "description": "Emotional state tag"
+        },
+        "is_draft": {
+          "type": "boolean",
+          "description": "Whether the entry is a draft"
+        },
+        "created_at": {
+          "type": "string",
+          "description": "Creation timestamp"
+        },
+        "updated_at": {
+          "type": "string",
+          "description": "Last updated timestamp"
+        }
+      },
+      "required": ["user_id", "content", "mood"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User account document"
+    },
+    "/users/{userId}/entries/{entryId}": {
+      "schema": "JournalEntry",
+      "description": "Private journal entries scoped strictly to the authenticated user"
+    }
+  }
+}

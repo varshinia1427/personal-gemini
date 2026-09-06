@@ -209,9 +209,9 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
           <div className="p-4.5 rounded-2xl bg-white/5 border border-white/10 text-xs sm:text-sm flex items-start gap-3">
             <Lock className="w-4 h-4 text-teal-400 shrink-0 mt-0.5" />
             <div>
-              <strong className="block text-white mb-0.5 font-medium">Strict User-ID Data Isolation</strong>
+              <strong className="block text-white mb-0.5 font-medium">Cloud Firestore Zero-Trust Security Rules</strong>
               <p className="text-slate-300 font-light leading-relaxed">
-                Every API request requires a verified session token and validates ownership on the backend. No user can read, query, or edit another person’s entries.
+                Database rules enforce request.auth.uid == userId at the database layer. No unauthenticated user or other account can query, read, or alter your journal entries.
               </p>
             </div>
           </div>
@@ -229,9 +229,9 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
           <div className="p-4.5 rounded-2xl bg-white/5 border border-white/10 text-xs sm:text-sm flex items-start gap-3">
             <Database className="w-4 h-4 text-amber-300 shrink-0 mt-0.5" />
             <div>
-              <strong className="block text-white mb-0.5 font-medium">Safe Password Cryptography</strong>
+              <strong className="block text-white mb-0.5 font-medium">Firebase Authentication Identity</strong>
               <p className="text-slate-300 font-light leading-relaxed">
-                Passwords are salted with unique random keys and hashed using PBKDF2-SHA512. Plain text credentials are never stored.
+                Authentication is handled directly by Google Firebase Authentication with OAuth and secure credentials.
               </p>
             </div>
           </div>
