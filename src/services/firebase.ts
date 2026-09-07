@@ -1,7 +1,4 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
-  getAuth,
-  GoogleAuthProvider,
   signInWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -12,8 +9,6 @@ import {
   type User as FirebaseUser,
 } from 'firebase/auth';
 import {
-  initializeFirestore,
-  getFirestore,
   collection,
   doc,
   getDoc,
@@ -22,9 +17,9 @@ import {
   updateDoc,
   deleteDoc,
   writeBatch,
-  getDocFromServer,
 } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+import { app, auth, db, firestore, googleProvider } from '../firebase-app.js';
+export { app, auth, db, firestore, googleProvider };
 import type {
   AgeGroup,
   DashboardStats,
@@ -39,54 +34,6 @@ import type {
   User,
   VoiceRecording,
 } from '../types';
-
-// Initialize Firebase App
-export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-
-// Initialize Firebase Auth
-export const auth = getAuth(app);
-export const googleProvider = new GoogleAuthProvider();
-googleProvider.setCustomParameters({
-  prompt: 'select_account',
-});
-
-// Initialize Firestore with long-polling transport enabled
-// to eliminate streaming connection timeouts behind reverse proxies and sandboxed iframes.
-export const db = (() => {
-  try {
-    return firebaseConfig.firestoreDatabaseId
-      ? initializeFirestore(
-          app,
-          {
-            experimentalForceLongPolling: true,
-          },
-          firebaseConfig.firestoreDatabaseId
-        )
-      : initializeFirestore(app, {
-          experimentalForceLongPolling: true,
-        });
-  } catch (_err) {
-    return firebaseConfig.firestoreDatabaseId
-      ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-      : getFirestore(app);
-  }
-})();
-
-// Connectivity validation per Firebase integration guidelines
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error: any) {
-    // If backend returns permission-denied, server connection is verified and operational
-    if (error?.code === 'permission-denied') {
-      return;
-    }
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error('Please check your Firebase configuration.');
-    }
-  }
-}
-testConnection();
 
 // Map Firebase User to App User interface
 export function mapFirebaseUser(fbUser: FirebaseUser, extraProfile?: Partial<User>): User {

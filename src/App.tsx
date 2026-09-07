@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 import { 
   apiLogout, 
-  apiUpdateUserAgeGroup, 
   apiUpdateUserLanguage, 
   apiGetEntries 
 } from './services/api';
@@ -20,17 +19,12 @@ import { NewJournalEntry } from './components/NewJournalEntry';
 import { MyJournal } from './components/MyJournal';
 import { EntryDetailModal } from './components/EntryDetailModal';
 import { ProfileSettings } from './components/ProfileSettings';
-import { KidsMyDay } from './components/kids/KidsMyDay';
-import { KidsDashboard } from './components/kids/KidsDashboard';
-import { StoryCorner } from './components/StoryCorner';
-import { WelcomeAgeSelection } from './components/WelcomeAgeSelection';
 import { AskGeminiModal } from './components/AskGeminiModal';
-import type { JournalEntry, User, JournalAppMode, AgeGroup, LanguageCode } from './types';
+import type { JournalEntry, User, LanguageCode } from './types';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
-  const [appMode, setAppMode] = useState<JournalAppMode>('personal');
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -38,8 +32,7 @@ export default function App() {
   const [viewingEntry, setViewingEntry] = useState<JournalEntry | null>(null);
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
 
-  // Age selection & Ask Gemini modals
-  const [showAgeSelectionModal, setShowAgeSelectionModal] = useState(false);
+  // Ask Gemini modal
   const [isAskGeminiOpen, setIsAskGeminiOpen] = useState(false);
   const [journalEntriesForGemini, setJournalEntriesForGemini] = useState<JournalEntry[]>([]);
 
@@ -51,26 +44,11 @@ export default function App() {
     setTimeout(() => setGlobalNotice(null), 3500);
   };
 
-  const handleModeChange = (newMode: JournalAppMode) => {
-    setAppMode(newMode);
-    if (newMode === 'kids') {
-      setCurrentTab('kids-my-day');
-      showToast('Switched to Kids Mode! 🎨🌟', 'info');
-    } else {
-      setCurrentTab('dashboard');
-      showToast('Switched to Personal Journal Mode. 🧘', 'info');
-    }
-  };
-
   // Real Firebase Auth listener
   useEffect(() => {
     const unsubscribe = subscribeToAuth((authUser) => {
       setUser(authUser);
       setIsLoadingAuth(false);
-      // Auto-set kids mode if age 3-6
-      if (authUser?.ageGroup === '3-6') {
-        setAppMode('kids');
-      }
     });
 
     return () => {
@@ -80,12 +58,7 @@ export default function App() {
 
   const handleLoginSuccess = (authenticatedUser: User) => {
     setUser(authenticatedUser);
-    if (authenticatedUser.ageGroup === '3-6') {
-      setAppMode('kids');
-      setCurrentTab('kids-dashboard');
-    } else {
-      setCurrentTab('dashboard');
-    }
+    setCurrentTab('dashboard');
     showToast(`Welcome back, ${authenticatedUser.name || 'Friend'}!`, 'success');
   };
 
@@ -97,7 +70,6 @@ export default function App() {
     } finally {
       setUser(null);
       setCurrentTab('dashboard');
-      setShowAgeSelectionModal(false);
       setIsAskGeminiOpen(false);
       showToast('Logged out securely.', 'info');
     }
@@ -113,22 +85,6 @@ export default function App() {
     setViewingEntry(null);
     setEditingEntry(entry);
     setCurrentTab('new-entry');
-  };
-
-  // Age group selection handler
-  const handleSelectAgeGroup = async (selectedAge: AgeGroup) => {
-    try {
-      const updatedUser = await apiUpdateUserAgeGroup(selectedAge);
-      setUser(updatedUser);
-      setShowAgeSelectionModal(false);
-      if (selectedAge === '3-6') {
-        setAppMode('kids');
-      }
-      showToast(`Personalized for ${selectedAge}! 🎉`, 'success');
-    } catch (err) {
-      console.error('Failed to update age group:', err);
-      showToast('Failed to save age group. Please try again.', 'error');
-    }
   };
 
   // Language update handler
@@ -163,7 +119,7 @@ export default function App() {
             <Sparkles className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="font-medium text-white text-base">Personal Gemini Journal</h1>
+            <h1 className="font-medium text-white text-base">Sunviora</h1>
             <p className="text-xs text-slate-400 font-light mt-1">Connecting to Firebase Authentication...</p>
           </div>
         </div>
@@ -176,20 +132,8 @@ export default function App() {
     return <LandingPage onLoginSuccess={handleLoginSuccess} />;
   }
 
-  // First Login Age Selection: If user has no ageGroup stored, show welcome age selection
-  if (!user.ageGroup && !showAgeSelectionModal) {
-    return (
-      <WelcomeAgeSelection
-        currentAgeGroup="18+"
-        userName={user.name}
-        onSelectAgeGroup={handleSelectAgeGroup}
-        isModal={false}
-      />
-    );
-  }
-
   return (
-    <div className={`min-h-screen text-slate-100 flex ${appMode === 'kids' ? 'bg-radial-kids' : ''}`}>
+    <div className="min-h-screen text-slate-100 flex">
       {/* Sidebar Navigation */}
       <Sidebar
         currentTab={currentTab}
@@ -203,10 +147,6 @@ export default function App() {
         onLogout={handleLogout}
         isOpenMobile={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
-        mode={appMode}
-        onToggleMode={handleModeChange}
-        ageGroup={user.ageGroup || '18+'}
-        onChangeAgeGroup={() => setShowAgeSelectionModal(true)}
         onOpenAskGemini={handleOpenAskGemini}
       />
 
@@ -224,34 +164,19 @@ export default function App() {
               <Menu className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-2">
-              <div className={`w-8 h-8 rounded-xl flex items-center justify-center shadow-xs ${
-                appMode === 'kids'
-                  ? 'bg-gradient-to-br from-amber-400 via-pink-400 to-indigo-400 text-slate-950 font-black'
-                  : 'bg-gradient-to-br from-indigo-400 to-teal-400 text-slate-900'
-              }`}>
-                {appMode === 'kids' ? <span>🌟</span> : <Sparkles className="w-4 h-4" />}
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-400 to-teal-400 text-slate-900 flex items-center justify-center shadow-xs">
+                <Sparkles className="w-4 h-4" />
               </div>
               <span className="font-semibold text-white text-sm truncate">
-                {appMode === 'kids' ? 'Kids Journal' : 'Gemini Journal'}
+                Sunviora
               </span>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              id="mobile-mode-switcher"
-              type="button"
-              onClick={() => handleModeChange(appMode === 'kids' ? 'personal' : 'kids')}
-              className={`text-2xs font-bold px-2.5 py-1 rounded-full border shadow-sm flex items-center gap-1 transition-all ${
-                appMode === 'kids'
-                  ? 'bg-amber-400/20 text-amber-200 border-amber-300/40'
-                  : 'bg-white/10 text-indigo-300 border-white/15'
-              }`}
-            >
-              <span>{appMode === 'kids' ? '🌟 Kids' : '🧘 Personal'}</span>
-            </button>
-            <span className="inline-flex items-center gap-1 text-2xs font-semibold px-2 py-0.5 rounded-full bg-white/5 text-teal-300 border border-white/10 backdrop-blur-md">
+            <span className="inline-flex items-center gap-1 text-2xs font-semibold px-2.5 py-1 rounded-full bg-white/5 text-teal-300 border border-white/10 backdrop-blur-md">
               <Lock className="w-3 h-3 text-teal-400" />
+              <span>Private</span>
             </span>
           </div>
         </header>
@@ -272,48 +197,16 @@ export default function App() {
 
         {/* Dynamic Page Views */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-          {/* Kids Mode Views */}
-          {currentTab === 'kids-my-day' && (
-            <KidsMyDay
-              onEntrySaved={(_entry) => {
-                showToast('Hooray! Saved your day to your journal! 🌟', 'success');
-                setCurrentTab('kids-dashboard');
-              }}
-              onNavigateToDashboard={() => setCurrentTab('kids-dashboard')}
-            />
-          )}
-
-          {currentTab === 'kids-dashboard' && (
-            <KidsDashboard
-              onNewDayClick={() => setCurrentTab('kids-my-day')}
-            />
-          )}
-
-          {/* Personal Journal Views */}
           {currentTab === 'dashboard' && (
             <Dashboard
               user={user}
-              ageGroup={user.ageGroup || '18+'}
               onNavigateNewEntry={() => {
-                if (user.ageGroup === '3-6' || appMode === 'kids') {
-                  setCurrentTab('kids-my-day');
-                } else {
-                  setEditingEntry(null);
-                  setCurrentTab('new-entry');
-                }
+                setEditingEntry(null);
+                setCurrentTab('new-entry');
               }}
               onNavigateMyJournal={() => setCurrentTab('my-journal')}
-              onNavigateStoryCorner={() => setCurrentTab('story-corner')}
               onSelectEntry={(entry) => setViewingEntry(entry)}
               onOpenAskGemini={handleOpenAskGemini}
-              onChangeAgeGroup={() => setShowAgeSelectionModal(true)}
-            />
-          )}
-
-          {currentTab === 'story-corner' && (
-            <StoryCorner
-              currentAgeGroup={user.ageGroup || '18+'}
-              currentLanguage={user.preferredLanguage || 'en'}
             />
           )}
 
@@ -343,9 +236,7 @@ export default function App() {
             <ProfileSettings
               user={user}
               onLogout={handleLogout}
-              currentAgeGroup={user.ageGroup || '18+'}
               currentLanguage={user.preferredLanguage || 'en'}
-              onUpdateAgeGroup={handleSelectAgeGroup}
               onUpdateLanguage={handleUpdateLanguage}
               onEntriesCleared={() => {
                 showToast('All journal entries have been cleared from Firestore.', 'info');
@@ -371,23 +262,11 @@ export default function App() {
         />
       )}
 
-      {/* Modal: Change Age Group */}
-      {showAgeSelectionModal && (
-        <WelcomeAgeSelection
-          currentAgeGroup={user?.ageGroup || '18+'}
-          userName={user?.name}
-          onSelectAgeGroup={handleSelectAgeGroup}
-          isModal={true}
-          onClose={() => setShowAgeSelectionModal(false)}
-        />
-      )}
-
       {/* Modal: Ask Gemini Q&A */}
       <AskGeminiModal
         isOpen={isAskGeminiOpen}
         onClose={() => setIsAskGeminiOpen(false)}
         entries={journalEntriesForGemini}
-        ageGroup={user.ageGroup || '18+'}
         language={user.preferredLanguage || 'en'}
       />
     </div>

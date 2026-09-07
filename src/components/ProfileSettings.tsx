@@ -12,27 +12,22 @@ import {
   Sparkles,
   Database,
   Globe,
-  Compass,
   Check
 } from 'lucide-react';
 import { 
   apiUpdatePassword, 
   apiClearUserData, 
   apiGetEntries,
-  apiUpdateUserAgeGroup,
   apiUpdateUserLanguage
 } from '../services/api';
-import type { User, AgeGroup, LanguageCode } from '../types';
+import type { User, LanguageCode } from '../types';
 import { SUPPORTED_LANGUAGES } from '../utils/languages';
-import { AGE_GROUP_CONFIGS } from '../utils/ageGroups';
 
 interface ProfileSettingsProps {
   user: User | null;
   onLogout: () => void;
   onEntriesCleared: () => void;
-  currentAgeGroup?: AgeGroup;
   currentLanguage?: LanguageCode;
-  onUpdateAgeGroup?: (ageGroup: AgeGroup) => Promise<void>;
   onUpdateLanguage?: (language: LanguageCode) => Promise<void>;
 }
 
@@ -40,16 +35,11 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
   user,
   onLogout,
   onEntriesCleared,
-  currentAgeGroup = '18+',
   currentLanguage = 'en',
-  onUpdateAgeGroup,
   onUpdateLanguage,
 }) => {
-  // Age group & language states
-  const [selectedAge, setSelectedAge] = useState<AgeGroup>(user?.ageGroup || currentAgeGroup);
+  // Language state
   const [selectedLang, setSelectedLang] = useState<LanguageCode>(user?.preferredLanguage || currentLanguage);
-  const [ageStatus, setAgeStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [isUpdatingAge, setIsUpdatingAge] = useState(false);
   const [langStatus, setLangStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isUpdatingLang, setIsUpdatingLang] = useState(false);
 
@@ -67,25 +57,6 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
 
   // Export state
   const [isExporting, setIsExporting] = useState(false);
-
-  const handleSaveAgeGroup = async (group: AgeGroup) => {
-    setSelectedAge(group);
-    setIsUpdatingAge(true);
-    setAgeStatus(null);
-    try {
-      if (onUpdateAgeGroup) {
-        await onUpdateAgeGroup(group);
-      } else {
-        await apiUpdateUserAgeGroup(group);
-      }
-      setAgeStatus({ type: 'success', message: `Age group updated to ${AGE_GROUP_CONFIGS[group].title}. Dashboard personalized!` });
-    } catch (err: any) {
-      console.error('Failed to update age group:', err);
-      setAgeStatus({ type: 'error', message: err.message || 'Failed to update age group.' });
-    } finally {
-      setIsUpdatingAge(false);
-    }
-  };
 
   const handleSaveLanguage = async (lang: LanguageCode) => {
     setSelectedLang(lang);
@@ -139,55 +110,48 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
       const res = await apiGetEntries();
       const entries = res.entries;
 
-      let fileContent = '';
-      let mimeType = 'application/json';
-      let fileName = `personal_gemini_journal_${new Date().toISOString().split('T')[0]}`;
+      let contentStr = '';
+      let filename = `sunviora-journal-export-${new Date().toISOString().split('T')[0]}`;
+      let mimeType = 'text/plain';
 
       if (format === 'json') {
-        fileContent = JSON.stringify(
-          {
-            user: { email: user?.email, name: user?.name },
-            exportedAt: new Date().toISOString(),
-            totalEntries: entries.length,
-            entries,
-          },
-          null,
-          2
-        );
-        fileName += '.json';
+        contentStr = JSON.stringify(entries, null, 2);
+        filename += '.json';
+        mimeType = 'application/json';
       } else {
-        mimeType = 'text/markdown';
-        fileName += '.md';
-        fileContent = `# Personal Gemini Journal Archive\n`;
-        fileContent += `User: ${user?.email}\n`;
-        fileContent += `Export Date: ${new Date().toLocaleDateString()}\n\n---\n\n`;
-
+        filename += '.md';
+        contentStr = `# Sunviora Journal Export\nExported on: ${new Date().toLocaleString()}\nTotal entries: ${entries.length}\n\n---\n\n`;
         entries.forEach((e) => {
-          fileContent += `## ${e.title}\n`;
-          fileContent += `**Date:** ${new Date(e.created_at).toLocaleString()} | **Mood:** ${e.mood}\n\n`;
-          fileContent += `${e.content}\n\n`;
+          contentStr += `## ${e.title}\n`;
+          contentStr += `**Date:** ${new Date(e.created_at).toLocaleString()} | **Mood:** ${e.mood} | **Language:** ${e.language}\n\n`;
+          contentStr += `${e.content}\n\n`;
           if (e.reflection) {
-            fileContent += `> ### Gemini AI Reflection\n`;
-            fileContent += `> **Summary:** ${e.reflection.summary}\n`;
-            fileContent += `> **Detected Mood:** ${e.reflection.detectedMood}\n`;
-            fileContent += `> **Themes:** ${e.reflection.keyThemes?.join(', ')}\n\n`;
+            contentStr += `### Gemini AI Reflection\n`;
+            if (e.reflection.personalReflection) {
+              contentStr += `${e.reflection.personalReflection}\n\n`;
+            }
+            if (e.reflection.summary) {
+              contentStr += `**Summary:** ${e.reflection.summary}\n\n`;
+            }
+            if (e.reflection.keyThemes && e.reflection.keyThemes.length > 0) {
+              contentStr += `**Themes:** ${e.reflection.keyThemes.join(', ')}\n\n`;
+            }
           }
-          fileContent += `---\n\n`;
+          contentStr += `---\n\n`;
         });
       }
 
-      const blob = new Blob([fileContent], { type: mimeType });
+      const blob = new Blob([contentStr], { type: mimeType });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Export failed:', err);
-      alert('Failed to export journal entries.');
+    } catch (err: any) {
+      alert(err.message || 'Failed to export entries.');
     } finally {
       setIsExporting(false);
     }
@@ -219,7 +183,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
         </p>
       </div>
 
-      {/* 1. User Profile Details (Frosted Glass) */}
+      {/* 1. User Profile Details */}
       <div className="bg-slate-900/40 border border-white/10 backdrop-blur-xl rounded-3xl p-6 sm:p-8 space-y-6 shadow-xl">
         <div className="flex items-center gap-3 pb-5 border-b border-white/10">
           <div className="w-10 h-10 rounded-2xl bg-indigo-500/15 text-indigo-300 flex items-center justify-center">
@@ -258,77 +222,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
         </div>
       </div>
 
-      {/* 2. Age-Based Personalization Settings */}
-      <div className="bg-slate-900/40 border border-white/10 backdrop-blur-xl rounded-3xl p-6 sm:p-8 space-y-6 shadow-xl">
-        <div className="flex items-center gap-3 pb-5 border-b border-white/10">
-          <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-300 flex items-center justify-center">
-            <Compass className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="font-medium text-white text-base">Age Group Personalization</h3>
-            <p className="text-xs text-slate-400 font-light">
-              Customize your layout, prompts, drawing tools, and Gemini AI tone
-            </p>
-          </div>
-        </div>
-
-        {ageStatus && (
-          <div
-            className={`p-3.5 rounded-xl text-xs font-medium ${
-              ageStatus.type === 'success'
-                ? 'bg-teal-500/15 border border-teal-500/30 text-teal-300'
-                : 'bg-rose-500/15 border border-rose-500/30 text-rose-300'
-            }`}
-          >
-            {ageStatus.message}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-          {(['3-6', '7-12', '13-17', '18+'] as AgeGroup[]).map((group) => {
-            const config = AGE_GROUP_CONFIGS[group];
-            const isSelected = selectedAge === group;
-            return (
-              <button
-                key={group}
-                type="button"
-                id={`settings-age-group-${group}`}
-                onClick={() => handleSaveAgeGroup(group)}
-                disabled={isUpdatingAge}
-                className={`p-4 rounded-2xl border text-left transition-all relative cursor-pointer ${
-                  isSelected
-                    ? 'bg-white/15 border-indigo-400/80 shadow-md ring-1 ring-indigo-400/50'
-                    : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-2xl">{config.emoji}</span>
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      isSelected
-                        ? 'bg-indigo-500 text-white'
-                        : 'bg-white/10 text-slate-300'
-                    }`}
-                  >
-                    {config.badge}
-                  </span>
-                </div>
-                <h4 className="text-sm font-semibold text-white">{config.title}</h4>
-                <p className="text-xs text-slate-400 mt-1 leading-relaxed line-clamp-2">
-                  {config.tagline}
-                </p>
-                {isSelected && (
-                  <div className="absolute top-3 right-3 text-indigo-400">
-                    <Check className="w-4 h-4" />
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 3. Preferred Language Settings */}
+      {/* 2. Preferred Language Settings */}
       <div className="bg-slate-900/40 border border-white/10 backdrop-blur-xl rounded-3xl p-6 sm:p-8 space-y-6 shadow-xl">
         <div className="flex items-center gap-3 pb-5 border-b border-white/10">
           <div className="w-10 h-10 rounded-2xl bg-teal-500/15 text-teal-300 flex items-center justify-center">
@@ -384,7 +278,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
         </div>
       </div>
 
-      {/* 4. Privacy & Security Architecture Information */}
+      {/* 3. Privacy & Security Architecture Information */}
       <div className="bg-slate-900/40 border border-white/10 backdrop-blur-xl rounded-3xl p-6 sm:p-8 space-y-6 shadow-xl">
         <div className="flex items-center gap-3 pb-5 border-b border-white/10">
           <div className="w-10 h-10 rounded-2xl bg-teal-500/15 text-teal-300 flex items-center justify-center">
@@ -456,7 +350,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
         </div>
       </div>
 
-      {/* 3. Account Settings: Change Password */}
+      {/* 4. Account Settings: Change Password */}
       <div className="bg-slate-900/40 border border-white/10 backdrop-blur-xl rounded-3xl p-6 sm:p-8 space-y-6 shadow-xl">
         <div className="flex items-center gap-3 pb-5 border-b border-white/10">
           <div className="w-10 h-10 rounded-2xl bg-indigo-500/15 text-indigo-300 flex items-center justify-center">
@@ -539,7 +433,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
         </form>
       </div>
 
-      {/* 4. Danger Zone & Logout */}
+      {/* 5. Danger Zone & Logout */}
       <div className="bg-slate-900/40 border border-white/10 backdrop-blur-xl rounded-3xl p-6 sm:p-8 space-y-6 shadow-xl">
         <div>
           <h3 className="font-medium text-white text-base">Account Actions</h3>
@@ -560,7 +454,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
             className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-white/10 hover:bg-white/15 border border-white/15 text-white text-xs font-medium transition-all shadow-md cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
-            <span>Log Out of Personal Gemini Journal</span>
+            <span>Log Out of Sunviora</span>
           </button>
 
           {/* Clear All Data Trigger */}

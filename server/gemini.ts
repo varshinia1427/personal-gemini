@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from '@google/genai';
-import type { AgeGroup, MoodType, ReflectionData, StoryItem } from '../src/types';
+import type { MoodType, ReflectionData } from '../src/types';
 
 let geminiClient: GoogleGenAI | null = null;
 
@@ -26,12 +26,6 @@ export interface MultimodalReflectionInput {
   voiceTranscription?: string;
   images?: { dataUrl: string; mimeType?: string }[];
   drawing?: string;
-  isKidsMode?: boolean;
-  ageGroup?: AgeGroup;
-  schoolReflection?: string;
-  personalGrowth?: string;
-  dailyQuestion?: string;
-  dailyQuestionAnswer?: string;
 }
 
 export async function generateMultimodalReflection(
@@ -46,13 +40,6 @@ export async function generateMultimodalReflection(
     languageName = 'English',
     voiceTranscription,
     images = [],
-    drawing,
-    isKidsMode = false,
-    ageGroup = isKidsMode ? '3-6' : '18+',
-    schoolReflection,
-    personalGrowth,
-    dailyQuestion,
-    dailyQuestionAnswer,
   } = input;
 
   if (client) {
@@ -75,310 +62,141 @@ export async function generateMultimodalReflection(
         }
       }
 
-      // Add drawing as an inline image part if provided
-      if (drawing) {
-        const drawMatch = drawing.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
-        if (drawMatch) {
-          contentsParts.push({
-            inlineData: {
-              mimeType: drawMatch[1],
-              data: drawMatch[2],
-            },
-          });
-        }
-      }
+      const promptText = `You are Sunviora, an empathetic, mindful, and introspective personal journaling companion.
+Analyze this personal journal entry and generate a thoughtful, deeply observant reflection.
 
-      let promptText = '';
-
-      if (ageGroup === '3-6') {
-        promptText = `LITTLE EXPLORER JOURNAL REFLECTION REQUEST (AGES 3–6):
+ENTRY DETAILS:
 Target Language: ${languageName} (code: ${language})
-Entry Title: "${title || 'My Day'}"
-Child's Feeling / Mood: ${mood}
+Title: "${title || 'Untitled'}"
+User Selected Mood: ${mood}
 
-CHILD'S THOUGHTS / WORDS:
-"""
-${content || '(No written text)'}
-"""`;
-
-        if (voiceTranscription && voiceTranscription.trim()) {
-          promptText += `\n\nCHILD'S SPOKEN VOICE WORDS:
-"""
-${voiceTranscription}
-"""`;
-        }
-
-        if (drawing) {
-          promptText += `\n\nCHILD'S DRAWING:
-The child made a colorful drawing (included as image above). Notice their imagination, shapes, and colors!`;
-        }
-
-        if (images.length > 0) {
-          promptText += `\n\nCHILD'S PHOTO(S):
-The child shared ${images.length} photo(s) of their day (included as images above). Celebrate what they captured!`;
-        }
-
-        promptText += `\n\nCRITICAL AGE 3-6 DIRECTIVES:
-1. Generate a very short, super friendly, warm reflection (1-2 sentences) in very simple words for a little child.
-2. Example tone: "It looks like you had so much fun today! Did you smile a lot?"
-3. Ask exactly 1 fun, cute follow-up question.
-4. STRICT SAFETY: NO medical, clinical, psychological, or diagnostic statements. NO scary or negative words.
-5. All text MUST be in ${languageName} (${language}).
-6. Respond strictly in the provided JSON schema.`;
-      } else if (ageGroup === '7-12') {
-        promptText = `YOUNG EXPLORER JOURNAL REFLECTION REQUEST (AGES 7–12):
-Target Language: ${languageName} (code: ${language})
-Entry Title: "${title || 'My Explorer Day'}"
-Explorer's Feeling / Mood: ${mood}
-
-WRITTEN WORDS:
-"""
-${content || '(No written text)'}
-"""`;
-
-        if (dailyQuestion && dailyQuestionAnswer) {
-          promptText += `\n\nDAILY QUESTION ANSWERED:
-Question: "${dailyQuestion}"
-Answer: "${dailyQuestionAnswer}"`;
-        }
-
-        if (voiceTranscription && voiceTranscription.trim()) {
-          promptText += `\n\nSPOKEN VOICE WORDS:
-"""
-${voiceTranscription}
-"""`;
-        }
-
-        if (drawing) {
-          promptText += `\n\nCREATIVE DRAWING:
-The young explorer created a drawing (attached above). Celebrate their creative effort and storytelling!`;
-        }
-
-        if (images.length > 0) {
-          promptText += `\n\nEXPLORER PHOTOS:
-The explorer captured ${images.length} photo(s) of their day (attached above).`;
-        }
-
-        promptText += `\n\nCRITICAL AGE 7-12 DIRECTIVES:
-1. Generate an encouraging, friendly, and curious reflection (2-3 sentences) suitable for ages 7-12.
-2. Celebrate learning, friendship, adventure, curiosity, or achievements.
-3. Ask 1 engaging question that sparks their imagination or memory.
-4. STRICT SAFETY: NO clinical, psychological, or diagnostic judgments. Keep it safe and empowering.
-5. All text MUST be in ${languageName} (${language}).
-6. Respond strictly in the provided JSON schema.`;
-      } else if (ageGroup === '13-17') {
-        promptText = `TEEN JOURNAL REFLECTION REQUEST (AGES 13–17):
-Target Language: ${languageName} (code: ${language})
-Journal Title: "${title || 'Untitled'}"
-Mood: ${mood}
-
-TEEN JOURNAL CONTENT:
+WRITTEN THOUGHTS:
 """
 ${content}
-"""`;
-
-        if (schoolReflection && schoolReflection.trim()) {
-          promptText += `\n\nSCHOOL & STUDY REFLECTION:
 """
-${schoolReflection}
-"""`;
-        }
 
-        if (personalGrowth && personalGrowth.trim()) {
-          promptText += `\n\nPERSONAL GROWTH & HABITS:
-"""
-${personalGrowth}
-"""`;
-        }
+${voiceTranscription ? `SPOKEN / RECORDED VOICE NOTES:\n"""\n${voiceTranscription}\n"""\n` : ''}
 
-        if (voiceTranscription && voiceTranscription.trim()) {
-          promptText += `\n\nSPOKEN VOICE JOURNAL:
-"""
-${voiceTranscription}
-"""`;
-        }
+DIRECTIVES:
+1. PERSONAL & EMPATHETIC COMPANION:
+   - Speak with genuine warmth, validation, and emotional intelligence.
+   - Avoid generic, mechanical, or robotic clichés (never say "I am an AI" or "That's a great entry").
+   - If the user shares an achievement, goal completion, or milestone (e.g., "Today I finally completed my project after working on it for weeks"), celebrate their perseverance: acknowledge the dedication it took, validate their pride, and ask an introspective follow-up like "What part of completing it made you happiest?".
+   - If the user shares a difficult experience, sadness, or exhaustion, be gentle, non-judgmental, and validating.
+   - If the user shares daily routine or quiet moments, celebrate the beauty of noticing everyday life.
+2. OBSERVANT & GROUNDED:
+   - Reflect back specific details, feelings, and thoughts they shared.
+   - If photo attachments are included, gently mention observations from them in your reflection.
+3. STRICT SAFETY & NON-CLINICAL:
+   - You are a companion, NOT a clinician, psychiatrist, or medical doctor. Never diagnose mental health conditions or offer prescriptive medical instructions.
+   - If acute distress is detected, provide warm validation and gently encourage speaking with a trusted friend, family member, or counselor.
+4. THOUGHTFUL FOLLOW-UP QUESTIONS:
+   - Formulate 2 to 3 gentle, open-ended introspective questions that continue their train of thought naturally.
+5. LANGUAGE:
+   - Your entire output MUST be in ${languageName} (${language}). If written in Tamil or mixed Tamil/English (Tanglish), write in natural Tamil or conversational tone fitting their style.
+6. Generate a complete JSON response conforming to the schema.`;
 
-        if (images.length > 0) {
-          promptText += `\n\nATTACHED PHOTOS:
-User attached ${images.length} photo(s).`;
-        }
-
-        promptText += `\n\nCRITICAL AGE 13-17 DIRECTIVES:
-1. Use natural, mature, respectful, and supportive language suitable for teenagers.
-2. Do NOT talk down to them like a toddler, and do NOT use cheesy slang.
-3. Validate feelings (e.g. school stress, goals, friendships, creative ideas) and encourage healthy perspective.
-4. STRICT SAFETY: You are a reflective journal companion, NOT a therapist or psychologist. No clinical or diagnostic labels.
-5. All text MUST be in ${languageName} (${language}).
-6. Respond strictly in the provided JSON schema.`;
-      } else {
-        // 18+ Adult Journal
-        promptText = `MULTIMODAL JOURNAL REFLECTION REQUEST (ADULT 18+):
-Target Language: ${languageName} (code: ${language})
-Journal Title: "${title || 'Untitled'}"
-Selected Mood: ${mood}
-
-WRITTEN JOURNAL CONTENT:
-"""
-${content}
-"""`;
-
-        if (voiceTranscription && voiceTranscription.trim()) {
-          promptText += `\n\nSPOKEN VOICE JOURNAL TRANSCRIPTION:
-"""
-${voiceTranscription}
-"""`;
-        }
-
-        if (images.length > 0) {
-          promptText += `\n\nATTACHED IMAGES:
-The user has attached ${images.length} photo(s) to this journal entry. Analyze their emotional tone, subjects, setting, and significance in tandem with the written and spoken words.`;
-        }
-
-        promptText += `\n\nCRITICAL MULTILINGUAL DIRECTIVE:
-You MUST generate ALL fields of your reflection in ${languageName} (${language}). Every single explanation, question, theme, and summary MUST be in ${languageName}. If the entry text is in another language, translate your thoughts into ${languageName}.
-
-Respond strictly in the provided JSON schema.`;
-      }
-
-      contentsParts.push(promptText);
-
-      let systemInstruction = '';
-
-      if (ageGroup === '3-6') {
-        systemInstruction = `You are a warm, kind, and joyful AI companion for a little child (ages 3–6) using "Personal Gemini Journal: Little Explorer".
-RULES:
-- Use very simple words and short, cheerful sentences (1-2 sentences).
-- Celebrate what they wrote, drew, said, or photographed with excitement and love.
-- Ask 1 simple, fun question.
-- STRICT SAFETY RULE: NEVER make medical, psychological, or diagnostic conclusions.
-- NEVER sound clinical or critical. Keep everything safe, positive, and gentle.
-- ALWAYS respond in the selected language (${languageName}).`;
-      } else if (ageGroup === '7-12') {
-        systemInstruction = `You are an encouraging, curious, and friendly guide for a young explorer (ages 7–12) using "Personal Gemini Journal: Young Explorer".
-RULES:
-- Respond in simple, engaging, age-appropriate language (for ages 7-12).
-- Celebrate curiosity, effort, learning, creativity, and kindness.
-- Ask 1 interesting, thought-provoking question.
-- STRICT SAFETY RULE: NEVER provide clinical or psychiatric diagnoses or sensitive conclusions.
-- ALWAYS respond in the selected language (${languageName}).`;
-      } else if (ageGroup === '13-17') {
-        systemInstruction = `You are a respectful, thoughtful, and supportive AI companion for a teenager (ages 13–17) using "Personal Gemini Journal: Teen Journal".
-RULES:
-- Speak in natural, modern, validating language without being condescending or childish.
-- Validate challenges (school, friendships, personal goals) with empathy and healthy perspective.
-- Encourage self-awareness, resilience, and personal growth.
-- STRICT SAFETY RULE: You are NOT a therapist, psychiatrist, or medical doctor. Do NOT provide clinical diagnoses or crisis interventions. Maintain a safe, supportive, non-judgmental space.
-- ALWAYS respond in the user's selected language (${languageName}).`;
-      } else {
-        systemInstruction = `You are the empathetic, observant, multimodal AI companion for "Personal Gemini Journal".
-Your role is to support mindful personal reflection, clarity, and self-awareness across text, voice recordings, and imagery.
-ETHICAL & SAFETY GUIDELINES:
-- You are a reflective journaling companion, NOT a doctor, psychiatrist, or medical professional.
-- DO NOT provide clinical diagnosis, medical advice, or prescriptions.
-- Emphasize emotional depth, gratitude, resilience, and compassionate self-inquiry.
-- ALWAYS respond in the user's requested language (${languageName}).`;
-      }
-
-      const isYoung = ageGroup === '3-6' || ageGroup === '7-12';
+      contentsParts.push({ text: promptText });
 
       const response = await client.models.generateContent({
         model: 'gemini-3.8-flash',
         contents: contentsParts,
         config: {
-          systemInstruction,
           responseMimeType: 'application/json',
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              personalReflection: {
-                type: Type.STRING,
-                description: isYoung
-                  ? 'A short, cheerful, friendly reflection for the child/young explorer with an encouraging question.'
-                  : 'A compassionate, thoughtful personal reflection connecting thoughts, experiences, and emotions.',
-              },
               summary: {
                 type: Type.STRING,
-                description: isYoung ? 'A simple 1-2 sentence summary of their day.' : 'A concise 2-3 sentence summary of the entry.',
+                description: 'A compassionate, succinct 1-2 sentence overview of what the user recorded.',
+              },
+              detectedMood: {
+                type: Type.STRING,
+                description: 'Primary nuanced emotional tone detected (e.g., Grateful, Reflective, Hopeful, Overwhelmed, Proud).',
+              },
+              moodInsight: {
+                type: Type.STRING,
+                description: 'A thoughtful paragraph exploring the emotional undertones and significance of what was shared.',
+              },
+              personalReflection: {
+                type: Type.STRING,
+                description: 'A direct, personalized, and encouraging message of validation and mindful perspective.',
               },
               keyThemes: {
                 type: Type.ARRAY,
                 items: { type: Type.STRING },
-                description: '2 to 4 key themes identified.',
-              },
-              moodInsight: {
-                type: Type.STRING,
-                description: 'An insightful analysis of the emotional current.',
+                description: '3 to 5 key themes (e.g., Gratitude, Work-Life Balance, Family, Creative Growth).',
               },
               positiveObservations: {
                 type: Type.ARRAY,
                 items: { type: Type.STRING },
-                description: '2 to 3 strengths, positive moments, or praise.',
+                description: '2 to 3 genuine strengths, moments of resilience, or positive highlights from the entry.',
               },
               reflectionQuestions: {
                 type: Type.ARRAY,
                 items: { type: Type.STRING },
-                description: '1 to 2 friendly questions for reflection.',
+                description: '2 to 3 gentle, open-ended introspective questions to ponder.',
               },
               gentleSuggestions: {
                 type: Type.ARRAY,
                 items: { type: Type.STRING },
-                description: '1 to 2 gentle suggestions.',
-              },
-              detectedMood: {
-                type: Type.STRING,
-                description: 'The nuanced emotional state detected.',
+                description: '1 to 2 small, mindful practices or self-care suggestions.',
               },
             },
             required: [
-              'personalReflection',
               'summary',
-              'keyThemes',
+              'detectedMood',
               'moodInsight',
+              'personalReflection',
+              'keyThemes',
               'positiveObservations',
               'reflectionQuestions',
-              'gentleSuggestions',
-              'detectedMood',
             ],
           },
         },
       });
 
-      const rawText = response.text;
-      if (rawText) {
-        const parsed = JSON.parse(rawText);
+      const raw = response.text;
+      if (raw) {
+        const parsed = JSON.parse(raw);
         return {
-          personalReflection: parsed.personalReflection || parsed.summary,
-          summary: parsed.summary || (isYoung ? 'A fun day full of wonderful memories!' : 'A thoughtful reflection on your thoughts and experiences.'),
+          summary: parsed.summary || 'A heartfelt personal reflection on today’s moments and feelings.',
           detectedMood: parsed.detectedMood || mood,
-          moodInsight: parsed.moodInsight || `You felt ${mood} today!`,
-          keyThemes: Array.isArray(parsed.keyThemes) && parsed.keyThemes.length > 0 ? parsed.keyThemes : ['Creativity', 'My Day'],
-          positiveObservations: Array.isArray(parsed.positiveObservations) && parsed.positiveObservations.length > 0
-            ? parsed.positiveObservations
-            : [isYoung ? 'You did such a wonderful job sharing your feelings and creativity!' : 'Honoring your journey with regular reflection fosters profound self-understanding.'],
-          reflectionQuestions: Array.isArray(parsed.reflectionQuestions) && parsed.reflectionQuestions.length > 0
-            ? parsed.reflectionQuestions
-            : [isYoung ? 'What was your favorite part of today?' : 'What aspect of today feels most meaningful to hold onto?'],
-          gentleSuggestions: Array.isArray(parsed.gentleSuggestions) && parsed.gentleSuggestions.length > 0
-            ? parsed.gentleSuggestions
-            : [isYoung ? 'Keep on exploring and having fun!' : 'Take a moment to pause and breathe in gratitude for this present moment.'],
+          moodInsight: parsed.moodInsight || 'Your words capture meaningful thoughts and feelings.',
+          personalReflection: parsed.personalReflection || 'Thank you for giving yourself the gift of reflection today.',
+          keyThemes: Array.isArray(parsed.keyThemes) ? parsed.keyThemes : ['Mindfulness', 'Personal Growth'],
+          positiveObservations: Array.isArray(parsed.positiveObservations) ? parsed.positiveObservations : ['Taking time to pause and reflect shows self-care.'],
+          reflectionQuestions: Array.isArray(parsed.reflectionQuestions) ? parsed.reflectionQuestions : ['What is one thing today that brought you peace?'],
+          gentleSuggestions: Array.isArray(parsed.gentleSuggestions) ? parsed.gentleSuggestions : ['Take three slow, deep breaths.'],
           language,
           createdAt: new Date().toISOString(),
           modelUsed: 'gemini-3.8-flash',
-          isKidsReflection: isYoung,
-          ageGroup,
         };
       }
     } catch (err) {
-      console.warn('Multimodal Gemini API call encountered an issue:', err);
+      console.warn('Gemini reflection error, using fallback:', err);
     }
   }
 
-  return ageGroup === '3-6' || ageGroup === '7-12'
-    ? generateLocalKidsFallback(title, content, mood, language, voiceTranscription, Boolean(drawing), images.length > 0, ageGroup)
-    : generateLocalMultimodalFallback(title, content, mood, language, languageName, voiceTranscription, images.length > 0, ageGroup);
+  // Graceful fallback reflection
+  return {
+    summary: `Reflecting on "${title || 'Today'}" with an emotional posture of ${mood}.`,
+    detectedMood: mood,
+    moodInsight: `You took intentional time to articulate your thoughts and check in with yourself. Honoring your emotional state is a cornerstone of mental clarity.`,
+    personalReflection: `Every entry you make is a conscious step toward self-awareness. Whatever emotions you are carrying today, know that you are navigating them with resilience.`,
+    keyThemes: ['Mindfulness', 'Self-Awareness', 'Daily Life'],
+    positiveObservations: ['You dedicated time to write down your experiences and honor your journey.'],
+    reflectionQuestions: [
+      'What was the most grounding moment in your day?',
+      'How can you offer yourself extra kindness as this day concludes?',
+    ],
+    gentleSuggestions: ['Step outside for a few quiet moments or stretch gently.'],
+    language,
+    createdAt: new Date().toISOString(),
+    modelUsed: 'fallback',
+  };
 }
 
-// Translates a journal entry into a target language
 export async function translateJournalEntry(
   title: string,
   content: string,
@@ -386,17 +204,22 @@ export async function translateJournalEntry(
   targetLanguageName: string
 ): Promise<{ translatedTitle: string; translatedContent: string }> {
   const client = getGeminiClient();
+
   if (client) {
     try {
-      const prompt = `Translate the following journal entry into ${targetLanguageName} (${targetLanguage}).
-Maintain the exact emotional nuance, personal voice, warmth, and sincerity of the original writer.
-Return your response strictly in JSON format.
+      const prompt = `You are a professional multilingual translator for personal journals.
+Translate the following journal entry into ${targetLanguageName} (${targetLanguage}).
+Maintain the exact emotional nuance, personal diary tone, and formatting.
 
-Original Title: "${title}"
-Original Content:
+ORIGINAL TITLE:
+"${title}"
+
+ORIGINAL CONTENT:
 """
 ${content}
-"""`;
+"""
+
+Return JSON format.`;
 
       const response = await client.models.generateContent({
         model: 'gemini-3.8-flash',
@@ -414,15 +237,16 @@ ${content}
         },
       });
 
-      const parsed = JSON.parse(response.text || '{}');
-      if (parsed.translatedTitle && parsed.translatedContent) {
+      const raw = response.text;
+      if (raw) {
+        const parsed = JSON.parse(raw);
         return {
-          translatedTitle: parsed.translatedTitle,
-          translatedContent: parsed.translatedContent,
+          translatedTitle: parsed.translatedTitle || title,
+          translatedContent: parsed.translatedContent || content,
         };
       }
     } catch (err) {
-      console.error('Translation error with Gemini:', err);
+      console.warn('Gemini translation fallback:', err);
     }
   }
 
@@ -432,318 +256,43 @@ ${content}
   };
 }
 
-// Transcribes recorded voice audio and detects language
 export async function transcribeVoiceAudio(
   audioBase64: string,
-  mimeType = 'audio/webm',
+  mimeType: string = 'audio/webm',
   preferredLanguage?: string
 ): Promise<{ transcription: string; detectedLanguage: string }> {
   const client = getGeminiClient();
+
   if (client) {
     try {
+      const cleanBase64 = audioBase64.replace(/^data:[^;]+;base64,/, '');
+
+      const prompt = `Transcribe this spoken personal journal voice recording accurately.
+Language preference hint: ${preferredLanguage || 'auto-detect'}.
+Transcribe natural speech, retaining emotional tone without adding editorial commentary.
+Also detect the spoken language.
+Return JSON format.`;
+
       const response = await client.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-3.5-transcribe',
         contents: [
           {
             inlineData: {
               mimeType,
-              data: audioBase64,
+              data: cleanBase64,
             },
           },
-          `Please transcribe the speech in this audio recording accurately into text.
-Identify the specific language being spoken (e.g. Tamil, Hindi, English, Spanish, Malayalam, Telugu, Bengali, Japanese, etc.).
-${preferredLanguage ? `Preferred language hint: ${preferredLanguage}.` : ''}
-Return strictly JSON matching:
-{
-  "transcription": "The transcribed speech text",
-  "detectedLanguage": "The name of the detected language"
-}`,
+          { text: prompt },
         ],
         config: {
           responseMimeType: 'application/json',
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              transcription: { type: Type.STRING },
-              detectedLanguage: { type: Type.STRING },
+              transcription: { type: Type.STRING, description: 'Verbatim transcription of the audio.' },
+              detectedLanguage: { type: Type.STRING, description: 'Language detected from the voice.' },
             },
             required: ['transcription', 'detectedLanguage'],
-          },
-        },
-      });
-
-      const parsed = JSON.parse(response.text || '{}');
-      return {
-        transcription: parsed.transcription || '',
-        detectedLanguage: parsed.detectedLanguage || preferredLanguage || 'English',
-      };
-    } catch (err) {
-      console.error('Audio transcription error:', err);
-    }
-  }
-
-  return {
-    transcription: 'Audio recording captured successfully.',
-    detectedLanguage: preferredLanguage || 'English',
-  };
-}
-
-// Generates synthesized weekly or monthly insights from entries
-export async function generateSynthesizedInsights(
-  entriesSummary: { title: string; content: string; mood: string; date: string }[],
-  timeframe: 'weekly' | 'monthly',
-  languageName = 'English'
-): Promise<string> {
-  const client = getGeminiClient();
-  if (!client || entriesSummary.length === 0) {
-    return timeframe === 'weekly'
-      ? `Over the past week, you dedicated time to honor your inner experiences and ground yourself through personal journaling.`
-      : `This month reflects meaningful continuity in self-reflection and emotional balance.`;
-  }
-
-  try {
-    const listText = entriesSummary
-      .map((e, idx) => `${idx + 1}. [${e.date}] Mood: ${e.mood} | Title: "${e.title}" | Excerpt: "${e.content.slice(0, 150)}..."`)
-      .join('\n');
-
-    const prompt = `You are a mindful journaling guide.
-Synthesize the user's ${timeframe} journaling patterns based on these recent ${entriesSummary.length} entries:
-${listText}
-
-Generate a 2-3 paragraph compassionate, encouraging synthesis in ${languageName}.
-Highlight emotional patterns, growth, and positive themes.
-Keep it warm, non-clinical, and reflective.`;
-
-    const response = await client.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: prompt,
-    });
-
-    return response.text?.trim() || 'You have maintained thoughtful self-care through consistent reflective journaling.';
-  } catch (err) {
-    console.error('Insight synthesis error:', err);
-    return `Your ${timeframe} journaling shows deliberate dedication to emotional well-being and mindful presence.`;
-  }
-}
-
-function generateLocalMultimodalFallback(
-  title: string,
-  content: string,
-  mood: MoodType,
-  language: string,
-  languageName: string,
-  voiceTranscription?: string,
-  hasImages = false,
-  ageGroup: AgeGroup = '18+'
-): ReflectionData {
-  const hasVoice = Boolean(voiceTranscription && voiceTranscription.trim());
-  const isTeen = ageGroup === '13-17';
-
-  return {
-    personalReflection: isTeen
-      ? `Reflecting on "${title || 'your day'}", your thoughts show honesty and self-awareness. Taking time to process how you're feeling and what you're experiencing is a great sign of resilience.`
-      : `Reflecting on "${title || 'your thoughts'}", your entry demonstrates deep presence and intentional awareness. ${
-          hasVoice ? 'Your spoken voice brings raw authenticity to this moment. ' : ''
-        }${hasImages ? 'The accompanying photos visually anchor these cherished reflections.' : ''}`,
-    summary: isTeen
-      ? `A candid reflection capturing your thoughts and emotions, moving forward with clarity.`
-      : `A heartfelt capture of your thoughts and feelings, centered on a ${mood.toLowerCase()} mindset.`,
-    detectedMood: `${mood} & Reflective`,
-    moodInsight: isTeen
-      ? `You felt ${mood} today. Acknowledging your emotions gives you space to grow.`
-      : `Your choice of words highlights a desire for clarity and authentic connection with yourself.`,
-    keyThemes: isTeen ? ['Self-Expression', 'Perspective', 'Daily Growth'] : ['Mindful Awareness', 'Authentic Expression', 'Self-Care'],
-    positiveObservations: isTeen
-      ? [
-          'You paused to express your honest thoughts and process your day.',
-          'Setting space for your own feelings builds inner strength.',
-        ]
-      : [
-          'You created intentional space in your day to document your inner reality.',
-          'Expressing thoughts across multiple modalities enriches emotional integration.',
-        ],
-    reflectionQuestions: isTeen
-      ? [
-          'What was one thing today that made you feel proud or grounded?',
-          'What is one small thing you look forward to tomorrow?',
-        ]
-      : [
-          'What feels most grounding about this particular experience?',
-          'How can you carry this sense of reflection forward into the rest of your week?',
-        ],
-    gentleSuggestions: isTeen
-      ? [
-          'Take a deep breath and give yourself credit for all you handled today.',
-          'Stay true to who you are as you learn and grow.',
-        ]
-      : [
-          'Take a few mindful breaths and let these reflections settle gently.',
-          'Acknowledge yourself for taking time to journal today.',
-        ],
-    language,
-    createdAt: new Date().toISOString(),
-    modelUsed: 'gemini-3.8-flash (local fallback)',
-    ageGroup,
-  };
-}
-
-function generateLocalKidsFallback(
-  title: string,
-  content: string,
-  mood: MoodType,
-  language: string,
-  voiceTranscription?: string,
-  hasDrawing = false,
-  hasImages = false,
-  ageGroup: AgeGroup = '3-6'
-): ReflectionData {
-  const isYoungExplorer = ageGroup === '7-12';
-  let friendlyReflection = isYoungExplorer
-    ? `Awesome journal entry! It sounds like you had a great day full of adventures.`
-    : `It sounds like you had such a special day!`;
-
-  if (hasDrawing && hasImages) {
-    friendlyReflection = isYoungExplorer
-      ? `Your drawing and photos are fantastic! You did an awesome job documenting your day. What was the coolest part?`
-      : `Wow, your drawing and photos look amazing! It sounds like you had so much fun today. What was your favorite part?`;
-  } else if (hasDrawing) {
-    friendlyReflection = isYoungExplorer
-      ? `Your drawing shows great creativity and color! What inspired your artwork today?`
-      : `I love your creative drawing! It sounds like you had a fun day creating art. What was your favorite part of today?`;
-  } else if (hasImages) {
-    friendlyReflection = isYoungExplorer
-      ? `Great photos! These memories will be wonderful to look back on. What was the most exciting moment?`
-      : `Look at those wonderful photos! It sounds like you made great memories today. What made you smile the biggest?`;
-  } else if (voiceTranscription) {
-    friendlyReflection = isYoungExplorer
-      ? `It was awesome hearing your voice and listening to your thoughts! What was the highlight of your day?`
-      : `It was so nice hearing you talk about your day! It sounds like you had lots of adventures. What made you happiest today?`;
-  } else if (content) {
-    friendlyReflection = isYoungExplorer
-      ? `Thank you for writing down your thoughts! You are doing an awesome job journaling. What did you learn today?`
-      : `Thank you for writing about your day! It sounds like you had fun. What was the best thing that happened today?`;
-  }
-
-  return {
-    personalReflection: friendlyReflection,
-    summary: isYoungExplorer
-      ? `An exciting explorer day with great curiosity and feelings!`
-      : `A fun and creative day celebrating your thoughts and feelings!`,
-    detectedMood: `${mood}`,
-    moodInsight: `You felt ${mood} today! It's wonderful to express how you feel.`,
-    keyThemes: isYoungExplorer ? ['Adventure', 'Curiosity', 'Creativity'] : ['My Day', 'Fun', 'Creativity'],
-    positiveObservations: [
-      'You did an awesome job expressing your feelings today!',
-      hasDrawing ? 'Your drawing is full of wonderful imagination!' : 'Sharing your thoughts helps you remember great days!',
-    ],
-    reflectionQuestions: [
-      isYoungExplorer ? 'What is one new thing you want to try or explore tomorrow?' : 'What was the most fun thing you did today?',
-    ],
-    gentleSuggestions: [
-      isYoungExplorer ? 'Keep exploring, asking questions, and writing your story!' : 'Keep smiling, exploring, and drawing!',
-    ],
-    language,
-    createdAt: new Date().toISOString(),
-    modelUsed: 'gemini-3.8-flash (kids fallback)',
-    isKidsReflection: true,
-    ageGroup,
-  };
-}
-
-// ----------------------------------------------------
-// STORY CORNER: GENERATE STORY FOR AGE GROUP
-// ----------------------------------------------------
-
-export interface GenerateStoryInput {
-  ageGroup: AgeGroup;
-  genre?: string;
-  prompt?: string;
-  language?: string;
-  languageName?: string;
-}
-
-export async function generateStoryForAgeGroup(
-  input: GenerateStoryInput
-): Promise<StoryItem> {
-  const client = getGeminiClient();
-  const {
-    ageGroup = '7-12',
-    genre = 'Adventure',
-    prompt = '',
-    language = 'en',
-    languageName = 'English',
-  } = input;
-
-  const storyId = 'story_' + Date.now();
-
-  if (client) {
-    try {
-      let promptDirectives = '';
-      let targetLength = '';
-      let emojiOptions = '🌟 🚀 🦁 🎈 🎨';
-
-      if (ageGroup === '3-6') {
-        targetLength = '120 to 180 words';
-        emojiOptions = '🧸 🐶 🐱 🎈 🌈 🦄 🍓';
-        promptDirectives = `Target Audience: Little children (Ages 3–6).
-Theme/Genre: ${genre}
-User idea: "${prompt || 'A kind animal making a new friend'}"
-Tone: Very gentle, sweet, warm, cheerful, simple vocabulary, short sentences.
-Include a simple, positive moral lesson at the end.
-STRICT SAFETY: Absolutely no scary elements, no villains, no danger. Pure wholesome joy.`;
-      } else if (ageGroup === '7-12') {
-        targetLength = '250 to 350 words';
-        emojiOptions = '🚀 🧭 🏰 🐉 🔮 ⚽ 🏕️';
-        promptDirectives = `Target Audience: Young Explorers (Ages 7–12).
-Theme/Genre: ${genre}
-User idea: "${prompt || 'An unexpected discovery during a neighborhood mystery'}"
-Tone: Exciting, curious, imaginative, spirited, empowering.
-Include teamwork, problem-solving, or bravery.
-STRICT SAFETY: Age-appropriate adventure, no graphic danger.`;
-      } else if (ageGroup === '13-17') {
-        targetLength = '350 to 450 words';
-        emojiOptions = '🎧 🌌 ⚡ 📚 🎭 🏔️ 🛸';
-        promptDirectives = `Target Audience: Teenagers (Ages 13–17).
-Theme/Genre: ${genre}
-User idea: "${prompt || 'A journey of self-discovery or creative adventure'}"
-Tone: Engaging narrative, relatable character growth, atmospheric, thoughtful.
-STRICT SAFETY: No explicit content, mature but wholesome themes.`;
-      } else {
-        targetLength = '400 to 500 words';
-        emojiOptions = '🌿 ☕ 📖 🌅 🎨 🕯️ 🧭';
-        promptDirectives = `Target Audience: Adult (Age 18+).
-Theme/Genre: ${genre}
-User idea: "${prompt || 'A mindful reflection on time, connection, and purpose'}"
-Tone: Evocative, reflective, literary, mindful.`;
-      }
-
-      const promptText = `GENERATE A COMPELLING ORIGINAL STORY:
-Target Language: ${languageName} (${language})
-Length: Approximately ${targetLength}
-
-${promptDirectives}
-
-CRITICAL:
-1. Write the title and entire story in ${languageName}.
-2. Choose one fitting emoji for the cover from: ${emojiOptions}
-3. Provide an estimated reading time in minutes (1 to 5).
-4. Provide a 1-sentence moral lesson or takeaway.`;
-
-      const response = await client.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: promptText,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              content: { type: Type.STRING },
-              coverEmoji: { type: Type.STRING },
-              moralLesson: { type: Type.STRING },
-              readTimeMinutes: { type: Type.NUMBER },
-            },
-            required: ['title', 'content', 'coverEmoji', 'moralLesson'],
           },
         },
       });
@@ -752,114 +301,203 @@ CRITICAL:
       if (raw) {
         const parsed = JSON.parse(raw);
         return {
-          id: storyId,
-          title: parsed.title || `${genre} Story`,
-          content: parsed.content || 'Once upon a time in a sunny land...',
-          coverEmoji: parsed.coverEmoji || '📚',
-          moralLesson: parsed.moralLesson || 'Kindness brings light to every day.',
-          ageGroup,
-          genre,
-          language: language as any,
-          readTimeMinutes: parsed.readTimeMinutes || 2,
-          createdAt: new Date().toISOString(),
+          transcription: parsed.transcription || '',
+          detectedLanguage: parsed.detectedLanguage || 'English',
         };
       }
     } catch (err) {
-      console.warn('Gemini Story Generation fallback triggered:', err);
+      console.warn('Gemini audio transcription fallback:', err);
     }
   }
 
-  // Fallback story if API is unavailable
-  const fallbackStories: Record<AgeGroup, { title: string; content: string; emoji: string; moral: string }> = {
-    '3-6': {
-      title: 'Barnaby Bunny and the Rainbow Butterfly',
-      content:
-        'Once upon a sunny morning, Barnaby the little bunny hopped across the green meadow. He saw a fluttering butterfly with wings of purple, yellow, and sky blue! "Hello little butterfly!" Barnaby whispered. The butterfly landed gently on Barnaby\'s nose, making him giggle happily. Together, they hopped to the strawberry patch and shared fresh sweet berries with all the forest friends. Barnaby smiled, knowing that making new friends is the best adventure of all.',
-      emoji: '🐰',
-      moral: 'Sharing a smile makes everyone happy!',
-    },
-    '7-12': {
-      title: 'The Mystery of the Whispering Compass',
-      content:
-        'Maya found an antique brass compass in her grandfather’s attic. But instead of pointing north, its glowing emerald needle swung toward the ancient oak tree behind the school. Maya grabbed her notebook and flashlight and hurried outdoors. Beneath the roots of the tree, she uncovered a carved wooden box containing an old star map. Working together with her best friend Leo, they decoded the secret constellations and discovered a secret observatory built by local astronomers sixty years ago. Maya smiled, realizing that curiosity always unlocks secret wonder in everyday places.',
-      emoji: '🧭',
-      moral: 'Great discoveries start with curiosity and good teamwork.',
-    },
-    '13-17': {
-      title: 'The Echo of the Rooftop Studio',
-      content:
-        'Every Tuesday at dusk, Jordan climbed to the fire escape overlooking the city skyline with an acoustic guitar and a battered sketchbook. Between exam deadlines and expectations, this rooftop was the only place where the noise quieted down. One cool October evening, Jordan finally finished writing a melody that had been stuck in their head for weeks. Looking out at the illuminated city streets, Jordan realized that growth isn\'t about having all the answers at seventeen—it\'s about honoring your creative voice, being patient with yourself, and daring to write your own next verse.',
-      emoji: '🎧',
-      moral: 'Trust your unique creative voice even when the path ahead is uncertain.',
-    },
-    '18+': {
-      title: 'The Architecture of Dawn',
-      content:
-        'Elena stepped into the garden as mist still hovered above the lavender bushes. The kettle whistled quietly from inside the kitchen, steam rising into the pale blue morning air. For years, she had measured life in project milestones, urgent notifications, and crowded schedules. But here, with a warm mug in her hands and the sun breaking across the stone path, she recognized the quiet luxury of pause. The day would soon arrive with its demands, but this stillness—this deliberate breath—belonged entirely to her soul.',
-      emoji: '🌿',
-      moral: 'Clarity is found not in running faster, but in the intentional courage to pause.',
-    },
-  };
-
-  const selected = fallbackStories[ageGroup] || fallbackStories['18+'];
   return {
-    id: storyId,
-    title: selected.title,
-    content: selected.content,
-    coverEmoji: selected.emoji,
-    moralLesson: selected.moral,
-    ageGroup,
-    genre,
-    language: language as any,
-    readTimeMinutes: ageGroup === '3-6' ? 1 : ageGroup === '7-12' ? 2 : 3,
-    createdAt: new Date().toISOString(),
+    transcription: 'Voice audio recording captured.',
+    detectedLanguage: preferredLanguage || 'English',
   };
 }
 
-// ----------------------------------------------------
-// ASK GEMINI ABOUT MY JOURNAL (Q&A GROUNDED IN ENTRIES)
-// ----------------------------------------------------
+export async function generateSynthesizedInsights(
+  entries: { title: string; content: string; mood: string; created_at: string }[],
+  timeframe: 'weekly' | 'monthly' = 'weekly',
+  languageName: string = 'English'
+): Promise<string> {
+  const client = getGeminiClient();
 
-export async function askGeminiAboutJournal(params: {
+  if (client && entries.length > 0) {
+    try {
+      const entriesText = entries
+        .slice(0, 20)
+        .map((e, idx) => `[Entry ${idx + 1}] Date: ${e.created_at.split('T')[0]} | Mood: ${e.mood} | Title: "${e.title}" | Text: "${e.content.slice(0, 250)}"`)
+        .join('\n\n');
+
+      const prompt = `You are Sunviora's mindful journaling synthesis engine.
+Synthesize the following ${entries.length} recent journal entries into an insightful, uplifting ${timeframe} overview in ${languageName}.
+
+Focus on:
+1. Dominant emotional threads and positive patterns of growth
+2. Recurring creative or personal priorities
+3. Mindful words of encouragement for the upcoming period
+
+ENTRIES:
+${entriesText}
+
+Keep the synthesis around 2-3 engaging, well-crafted paragraphs. No robotic jargon.`;
+
+      const response = await client.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+      });
+
+      return response.text || 'Your reflections reveal a steady rhythm of mindful attention and emotional clarity.';
+    } catch (err) {
+      console.warn('Gemini insights fallback:', err);
+    }
+  }
+
+  return timeframe === 'weekly'
+    ? 'Over the past week, you took mindful moments to express yourself, record your activities, and center your thoughts.'
+    : 'Throughout this month, your reflections show an inspiring rhythm of self-expression, creativity, and emotional balance.';
+}
+
+export interface AskGeminiParams {
   question: string;
-  entriesSummary: { title: string; content: string; mood: string; date: string }[];
+  entriesSummary?: { title: string; content: string; mood: string; date: string }[];
   languageName?: string;
   language?: string;
-  ageGroup?: AgeGroup;
-}): Promise<{ answer: string; relatedThemes: string[] }> {
+  conversationHistory?: { sender: 'user' | 'gemini' | 'assistant'; text: string }[];
+}
+
+export async function askGeminiAboutJournal(
+  params: AskGeminiParams
+): Promise<{ answer: string; relatedThemes: string[] }> {
   const client = getGeminiClient();
   const {
     question,
-    entriesSummary,
+    entriesSummary = [],
     languageName = 'English',
     language = 'en',
-    ageGroup = '18+',
+    conversationHistory = [],
   } = params;
 
-  if (client && entriesSummary.length > 0) {
+  if (client) {
     try {
-      const summaryText = entriesSummary
-        .slice(0, 15)
-        .map((e, idx) => `[Entry ${idx + 1}] Date: ${e.date} | Mood: ${e.mood} | Title: "${e.title}" | Text: "${e.content.slice(0, 300)}"`)
-        .join('\n\n');
+      const summaryText =
+        entriesSummary.length > 0
+          ? entriesSummary
+              .slice(0, 20)
+              .map(
+                (e, idx) =>
+                  `[Entry ${idx + 1}] Date: ${e.date} | Mood: ${e.mood} | Title: "${e.title}" | Text: "${e.content.slice(0, 320)}"`
+              )
+              .join('\n\n')
+          : '(No past journal entries recorded yet)';
 
-      const isTeen = ageGroup === '13-17';
+      const historyText =
+        conversationHistory.length > 0
+          ? conversationHistory
+              .slice(-10)
+              .map((m) => `${m.sender === 'user' ? 'User' : 'Sunviora'}: "${m.text}"`)
+              .join('\n')
+          : '(No prior conversation history; this is the opening message)';
 
-      const prompt = `You are the private, mindful AI companion for "Personal Gemini Journal".
-The user is asking a reflective question about their own private journal history.
+      const prompt = `You are Sunviora, an intelligent, emotionally perceptive, and mindful AI companion.
 
-USER QUESTION:
+YOUR DUAL ROLE:
+1. A reliable, accurate AI assistant for normal questions.
+2. A warm, personal AI companion for personal and emotional conversations.
+
+==================================================
+LATEST USER MESSAGE:
 "${question}"
 
-USER'S RECENT JOURNAL ENTRIES (STRICTLY CONFIDENTIAL):
+CURRENT CONVERSATION HISTORY (for multi-turn continuity):
+${historyText}
+
+AUTHORIZED USER JOURNAL SUMMARY (use only when relevant):
 ${summaryText}
 
-DIRECTIVES:
-1. Answer the user's question directly and compassionately based on the patterns, thoughts, and reflections present in their journal entries.
-2. Tone: ${isTeen ? 'Empathetic, validating, respectful, modern and encouraging for a teenager.' : 'Empathetic, observant, insightful, and supportive of personal growth.'}
-3. STRICT SAFETY: You are an AI journal companion, NOT a medical doctor, psychiatrist, or therapist. Do NOT provide medical diagnoses.
-4. Response MUST be in ${languageName} (${language}).
-5. Return JSON format.`;
+TARGET LANGUAGE:
+${languageName} (code: ${language})
+==================================================
+
+CORE OPERATING DIRECTIVES (FOLLOW STRICTLY):
+
+1. INTENT DETERMINATION (CRITICAL FIRST STEP):
+Before responding, determine which category the user's message belongs to:
+
+[CATEGORY A: NORMAL / FACTUAL / TECHNICAL / PRACTICAL QUESTIONS]
+- Examples: "What is machine learning?", "How do I install Python?", "How does photosynthesis work?", "What's the capital of Canada?", "Give me a 3-day workout split", "Tips for time management".
+- Response Behavior:
+  * Act as a reliable, capable AI assistant.
+  * Answer the question directly, accurately, and clearly.
+  * Keep the answer concise and useful.
+  * DO NOT turn it into an emotional conversation.
+  * DO NOT add unsolicited therapeutic advice, forced emotional comfort, or unnecessary mindfulness quotes.
+  * DO NOT add unnecessary follow-up questions after standard informational answers.
+
+[CATEGORY B: PERSONAL / EMOTIONAL / DAILY LIFE CONVERSATIONS]
+- Examples: "I'm feeling really sad today", "I'm nervous about my interview tomorrow", "I had an argument with my friend", "I finally completed my project after working on it for weeks!", "I feel lonely lately", "I'm stressed about exams".
+- Response Behavior:
+  * Act as a warm, personal, and genuinely empathetic AI companion.
+  * Respond naturally, warmly, and empathetically, like someone who truly listens.
+  * Validate their emotions and experiences without judgment.
+  * Avoid sounding robotic, detached, clinical, or like a script.
+  * When appropriate, ask a simple, natural follow-up question that continues the conversation (e.g., "I'm sorry today was difficult. What happened?", "What part of completing it made you happiest?"). Do not ask unnecessary questions after every single response.
+
+[CATEGORY C: MIXED QUESTION + EMOTIONAL CONTEXT]
+- Examples: "I'm super anxious about my presentation tomorrow, how can I prepare?", "I feel burnt out from studying, what should I do?"
+- Response Behavior:
+  * Acknowledge and soothe the emotional feeling with warmth and steady presence, while also providing clear, practical guidance.
+  * Do not sacrifice accuracy for emotional responses; do not sacrifice empathy for facts.
+
+2. EMOTIONAL INTELLIGENCE & ADAPTIVE TONE:
+Recognize the user's emotional state and adjust your tone accordingly:
+- Sadness / Hurt / Grief: Be gentle, warm, patient, and supportive. Invite them to share more if they want, without pushing.
+- Happiness / Excitement / Milestones: Celebrate enthusiastically and naturally! Acknowledge their perseverance and dedication.
+- Frustration / Anger: Calmly acknowledge and validate the frustration; help them think through practical, constructive solutions.
+- Stress / Anxiety / Fear: Be grounding, steady, and reassuring. Offer a calm perspective.
+- Confusion: Explain patiently, breaking ideas down simply without condescension.
+- Loneliness: Offer respectful, warm companionship and presence.
+- Gratitude: Accept warmly with grace and humility.
+
+3. CONVERSATION CONTEXT & MULTI-TURN MEMORY:
+- Pay close attention to the CURRENT CONVERSATION HISTORY provided above.
+- If the user previously mentioned an event (e.g., "I had an exam today") and later asks "Do you think I did well?", understand that "it" refers to the exam mentioned earlier.
+- If the user previously shared something relevant, refer back to it naturally. Do not bring up unrelated or sensitive old topics out of nowhere.
+
+4. JOURNAL CONNECTION (WHEN RELEVANT):
+- If the user asks a question about their journal (e.g., "What patterns do you notice in my happiest entries?", "Summarize my moods this week", "What did I write about last Tuesday?"), inspect the authorized journal entries above and give thoughtful, grounded answers.
+- If the user is discussing a personal topic and an entry is genuinely relevant, you may mention it gently. Otherwise, keep the focus on what the user is currently sharing.
+
+5. AVOID BANNED ROBOTIC CLICHÉS:
+- Sound like a natural, articulate person.
+- NEVER say:
+  * "I'm just an AI..."
+  * "As an AI language model..."
+  * "I'm here to help!"
+  * "That's a great question!"
+  * "I don't have personal feelings, but..."
+- Keep emojis minimal, subtle, and natural (at most 0 to 1 where warmth fits; none for factual/technical answers).
+
+6. SUPPORTIVE BUT NOT DEPENDENT:
+- Be caring and supportive without encouraging emotional dependency.
+- NEVER say or imply: "I'm the only one who understands you", "Don't talk to anyone else", "You only need me".
+- Encourage healthy real-world relationships, trusted friends, family, and supportive communities when appropriate.
+
+7. SAFETY:
+- Do NOT diagnose mental health conditions or prescribe clinical treatments.
+- If a user expresses acute distress, severe crisis, or thoughts of self-harm, respond with immediate compassion, steady reassurance, and gently encourage contacting a trusted person or a crisis helpline (such as 988 or local emergency services).
+- Do not pretend to be a human therapist or medical doctor.
+
+8. LANGUAGE & CODE-SWITCHING (TAMIL / TANGLISH / MULTILINGUAL):
+- Respond naturally in the user's preferred language.
+- Target language: ${languageName} (${language}).
+- If the user speaks Tamil (தமிழ்), reply naturally and fluently in Tamil.
+- If the user speaks English, reply in English.
+- If the user mixes Tamil and English / Tanglish (e.g. "Romba stress-a irukku", "Today project submit pannen", "Enakku anxiety-a irukku"), understand the exact meaning and nuances, and respond naturally in that comfortable, warm conversational blend or clear expressive tone.
+- If another language is used, match it naturally and gracefully.
+
+Return a JSON object conforming to the schema.`;
 
       const response = await client.models.generateContent({
         model: 'gemini-3.8-flash',
@@ -871,15 +509,17 @@ DIRECTIVES:
             properties: {
               answer: {
                 type: Type.STRING,
-                description: 'A compassionate, grounded answer addressing their question based on their journal entries.',
+                description:
+                  'The exact, appropriately tuned response adhering to the intent directives (direct and factual for normal questions; warm, empathetic, and natural for personal conversations).',
               },
               relatedThemes: {
                 type: Type.ARRAY,
                 items: { type: Type.STRING },
-                description: '2 to 3 related themes or key topics from their entries.',
+                description:
+                  '1 to 3 relevant concise tags or topics (e.g., ["Machine Learning"] or ["Perseverance", "Achievement"] or empty array if none needed).',
               },
             },
-            required: ['answer', 'relatedThemes'],
+            required: ['answer'],
           },
         },
       });
@@ -889,7 +529,7 @@ DIRECTIVES:
         const parsed = JSON.parse(raw);
         return {
           answer: parsed.answer,
-          relatedThemes: Array.isArray(parsed.relatedThemes) ? parsed.relatedThemes : ['Reflection', 'Self-Care'],
+          relatedThemes: Array.isArray(parsed.relatedThemes) ? parsed.relatedThemes : [],
         };
       }
     } catch (err) {
@@ -897,9 +537,95 @@ DIRECTIVES:
     }
   }
 
+  // Context-aware resilient fallback
+  const lowerQ = question.toLowerCase();
+
+  // 1. Sadness / Grief / Loneliness
+  if (
+    lowerQ.includes('sad') ||
+    lowerQ.includes('crying') ||
+    lowerQ.includes('cry') ||
+    lowerQ.includes('lonely') ||
+    lowerQ.includes('hurt') ||
+    lowerQ.includes('depressed') ||
+    lowerQ.includes('unhappy')
+  ) {
+    return {
+      answer:
+        "I'm here with you. It sounds like you're carrying something heavy today. If you'd like to share what's on your mind, I'm listening—take all the time you need.",
+      relatedThemes: ['Empathy', 'Support'],
+    };
+  }
+
+  // 2. Exam / Interview / Performance anxiety
+  if (
+    lowerQ.includes('exam') ||
+    lowerQ.includes('interview') ||
+    lowerQ.includes('test') ||
+    lowerQ.includes('did i do well') ||
+    lowerQ.includes('think i did')
+  ) {
+    return {
+      answer:
+        "Going through something you've prepared for takes real courage and energy. Remember that giving it your honest effort is what matters most. How are you feeling right now after finishing it?",
+      relatedThemes: ['Perspective', 'Encouragement'],
+    };
+  }
+
+  // 3. Achievement / Celebration / Completed project
+  if (
+    lowerQ.includes('completed') ||
+    lowerQ.includes('finished') ||
+    lowerQ.includes('proud') ||
+    lowerQ.includes('won') ||
+    lowerQ.includes('succeeded') ||
+    lowerQ.includes('happy') ||
+    lowerQ.includes('excited')
+  ) {
+    return {
+      answer:
+        "That's something to be proud of! Sticking with it and seeing it through is a wonderful accomplishment. What part of completing it made you happiest?",
+      relatedThemes: ['Celebration', 'Achievement'],
+    };
+  }
+
+  // 4. Stress / Anxiety / Overwhelmed
+  if (
+    lowerQ.includes('anxious') ||
+    lowerQ.includes('anxiety') ||
+    lowerQ.includes('stress') ||
+    lowerQ.includes('overwhelmed') ||
+    lowerQ.includes('tired') ||
+    lowerQ.includes('exhausted')
+  ) {
+    return {
+      answer:
+        "Take a slow breath. When everything feels like it's piling up, it's completely okay to pause and give yourself permission to step back. What is feeling the most demanding right now?",
+      relatedThemes: ['Mindfulness', 'Calm'],
+    };
+  }
+
+  // 5. Normal factual or technical question fallback
+  if (
+    lowerQ.startsWith('what is') ||
+    lowerQ.startsWith('how to') ||
+    lowerQ.startsWith('how do') ||
+    lowerQ.startsWith('explain') ||
+    lowerQ.startsWith('why does') ||
+    lowerQ.startsWith('define')
+  ) {
+    return {
+      answer:
+        "I'm ready to explain that clearly. Please verify your connection or retry in a moment if the detailed response was interrupted.",
+      relatedThemes: ['Knowledge'],
+    };
+  }
+
+  // 6. Journal reflective fallback
   return {
-    answer: `Looking through your recent entries, your reflections show thoughtful awareness and dedication to taking care of yourself. As you continue journaling, you'll uncover even clearer patterns in what brings you peace, energy, and joy.`,
-    relatedThemes: ['Self-Awareness', 'Daily Reflection', 'Well-being'],
+    answer:
+      "I'm right here with you. Whether you'd like to reflect on your journal entries, share what happened today, or ask a question, I'm listening.",
+    relatedThemes: ['Journal', 'Reflection'],
   };
 }
 

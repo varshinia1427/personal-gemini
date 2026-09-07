@@ -192,7 +192,7 @@ export const GeminiReflectionCard: React.FC<GeminiReflectionCardProps> = ({
       <div className="mt-6 pt-4 border-t border-white/10 flex items-start gap-2.5 text-xs text-slate-400 font-light">
         <ShieldAlert className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
         <p className="leading-normal">
-          <strong className="text-slate-300 font-normal">Mindful Disclaimer:</strong> Personal Gemini Journal is an AI-assisted personal journaling and self-reflection tool. It does not provide clinical diagnosis, psychiatric evaluations, therapy, or medical advice.
+          <strong className="text-slate-300 font-normal">Mindful Disclaimer:</strong> Sunviora is an AI-assisted personal journaling and self-reflection tool. It does not provide clinical diagnosis, psychiatric evaluations, therapy, or medical advice.
         </p>
       </div>
     </div>

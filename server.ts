@@ -7,10 +7,9 @@ import {
   translateJournalEntry,
   transcribeVoiceAudio,
   generateSynthesizedInsights,
-  generateStoryForAgeGroup,
   askGeminiAboutJournal,
 } from './server/gemini';
-import type { AgeGroup, MoodType } from './src/types';
+import type { MoodType } from './src/types';
 
 dotenv.config();
 
@@ -25,7 +24,7 @@ app.use(express.urlencoded({ limit: '30mb', extended: true }));
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
-    service: 'Personal Gemini Journal',
+    service: 'Sunviora',
     auth: 'Firebase Authentication',
     database: 'Cloud Firestore',
     multimodal: true,
@@ -56,23 +55,14 @@ app.post('/api/reflect', requireAuth, async (req: Request, res: Response) => {
       languageName,
       voiceTranscription,
       images,
-      drawing,
-      isKidsMode,
-      ageGroup,
-      schoolReflection,
-      personalGrowth,
-      dailyQuestion,
-      dailyQuestionAnswer,
     } = req.body;
 
     const hasText = Boolean(content && typeof content === 'string' && content.trim().length >= 2);
     const hasVoice = Boolean(voiceTranscription && typeof voiceTranscription === 'string' && voiceTranscription.trim().length >= 2);
-    const hasDrawing = Boolean(drawing && typeof drawing === 'string' && drawing.startsWith('data:image/'));
     const hasImages = Array.isArray(images) && images.length > 0;
-    const hasDailyQuestion = Boolean(dailyQuestionAnswer && dailyQuestionAnswer.trim().length >= 2);
 
-    if (!hasText && !hasVoice && !hasDrawing && !hasImages && !hasDailyQuestion) {
-      res.status(400).json({ error: 'Please provide some text, voice recording, drawing, or photo before requesting an AI reflection.' });
+    if (!hasText && !hasVoice && !hasImages) {
+      res.status(400).json({ error: 'Please provide some text, voice recording, or photo before requesting an AI reflection.' });
       return;
     }
 
@@ -80,20 +70,13 @@ app.post('/api/reflect', requireAuth, async (req: Request, res: Response) => {
     const selectedMood: MoodType = validMoods.includes(mood) ? mood : 'Happy';
 
     const reflection = await generateMultimodalReflection({
-      title: title || (isKidsMode ? 'My Day' : 'Untitled'),
+      title: title || 'Untitled',
       content: content || '',
       mood: selectedMood,
       language: language || 'en',
       languageName: languageName || 'English',
       voiceTranscription: voiceTranscription || '',
       images: Array.isArray(images) ? images : [],
-      drawing: drawing || undefined,
-      isKidsMode: Boolean(isKidsMode),
-      ageGroup: (ageGroup as AgeGroup) || (isKidsMode ? '3-6' : '18+'),
-      schoolReflection,
-      personalGrowth,
-      dailyQuestion,
-      dailyQuestionAnswer,
     });
 
     res.json({ reflection });
@@ -175,33 +158,11 @@ app.post('/api/insights', requireAuth, async (req: Request, res: Response) => {
 });
 
 // ==========================================
-// STORY CORNER GENERATION
-// ==========================================
-app.post('/api/story', requireAuth, async (req: Request, res: Response) => {
-  try {
-    const { ageGroup, genre, prompt, language, languageName } = req.body;
-
-    const story = await generateStoryForAgeGroup({
-      ageGroup: (ageGroup as AgeGroup) || '7-12',
-      genre: genre || 'Adventure',
-      prompt: prompt || '',
-      language: language || 'en',
-      languageName: languageName || 'English',
-    });
-
-    res.json({ story });
-  } catch (err: any) {
-    console.error('Story route error:', err);
-    res.status(500).json({ error: 'Failed to generate story.' });
-  }
-});
-
-// ==========================================
 // ASK GEMINI ABOUT MY JOURNAL (CONVERSATIONAL Q&A)
 // ==========================================
 app.post('/api/ask-gemini', requireAuth, async (req: Request, res: Response) => {
   try {
-    const { question, entriesSummary, languageName, language, ageGroup } = req.body;
+    const { question, entriesSummary, languageName, language, conversationHistory } = req.body;
 
     if (!question || typeof question !== 'string' || !question.trim()) {
       res.status(400).json({ error: 'Please provide a question.' });
@@ -213,7 +174,7 @@ app.post('/api/ask-gemini', requireAuth, async (req: Request, res: Response) => 
       entriesSummary: Array.isArray(entriesSummary) ? entriesSummary : [],
       languageName: languageName || 'English',
       language: language || 'en',
-      ageGroup: (ageGroup as AgeGroup) || '18+',
+      conversationHistory: Array.isArray(conversationHistory) ? conversationHistory : [],
     });
 
     res.json(result);
@@ -242,7 +203,7 @@ async function start() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Personal Gemini Journal server running on http://0.0.0.0:${PORT}`);
+    console.log(`Sunviora server running on http://0.0.0.0:${PORT}`);
   });
 }
 

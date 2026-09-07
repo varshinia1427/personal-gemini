@@ -100,7 +100,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
             </div>
             <div>
               <span className="font-medium text-white text-base sm:text-lg tracking-tight">
-                Personal Gemini Journal
+                Sunviora
               </span>
             </div>
           </div>
@@ -327,7 +327,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
       <footer className="w-full border-t border-white/10 py-6 bg-slate-950/40 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
           <div>
-            <strong className="text-slate-200">Personal Gemini Journal</strong> — Your thoughts. Your journal. Your AI reflection — privately.
+            <strong className="text-slate-200">Sunviora</strong> — Your thoughts. Your journal. Your AI reflection — privately.
           </div>
           <div className="flex items-center gap-4 text-slate-400 font-light">
             <span>Server-side Gemini 3.8 Flash</span>

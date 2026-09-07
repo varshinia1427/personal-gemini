@@ -7,24 +7,15 @@ import {
   LogOut, 
   Sparkles, 
   X,
-  Sun,
-  Award,
-  Palette,
-  Compass,
-  BookMarked,
-  MessageSquareHeart
+  Lock
 } from 'lucide-react';
-import type { User as UserType, JournalAppMode, AgeGroup } from '../types';
-import { AGE_GROUP_CONFIGS } from '../utils/ageGroups';
+import type { User as UserType } from '../types';
 
 export type NavTab = 
   | 'dashboard' 
   | 'new-entry' 
   | 'my-journal' 
-  | 'story-corner'
-  | 'settings' 
-  | 'kids-my-day' 
-  | 'kids-dashboard';
+  | 'settings';
 
 interface SidebarProps {
   currentTab: NavTab;
@@ -33,10 +24,6 @@ interface SidebarProps {
   onLogout: () => void;
   isOpenMobile: boolean;
   onCloseMobile: () => void;
-  mode: JournalAppMode;
-  onToggleMode: (mode: JournalAppMode) => void;
-  ageGroup?: AgeGroup;
-  onChangeAgeGroup?: () => void;
   onOpenAskGemini?: () => void;
 }
 
@@ -47,30 +34,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
   isOpenMobile,
   onCloseMobile,
-  mode,
-  onToggleMode,
-  ageGroup = '18+',
-  onChangeAgeGroup,
   onOpenAskGemini,
 }) => {
-  const ageConfig = AGE_GROUP_CONFIGS[ageGroup || '18+'];
-
-  const personalNavItems: { id: NavTab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: string }[] = [
+  const navItems: { id: NavTab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: string }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'new-entry', label: 'New Entry', icon: PenLine, badge: '+ New' },
     { id: 'my-journal', label: 'My Journal', icon: BookOpen },
-    { id: 'story-corner', label: 'Story Corner', icon: BookMarked, badge: '✨ Stories' },
     { id: 'settings', label: 'Profile & Settings', icon: User },
   ];
-
-  const kidsNavItems: { id: NavTab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: string }[] = [
-    { id: 'kids-my-day', label: 'My Day', icon: Sun, badge: '☀️ Start' },
-    { id: 'kids-dashboard', label: 'Badges & Memories', icon: Award },
-    { id: 'story-corner', label: 'Story Corner', icon: BookMarked, badge: '✨ AI' },
-    { id: 'settings', label: 'Settings', icon: User },
-  ];
-
-  const navItems = mode === 'kids' || ageGroup === '3-6' ? kidsNavItems : personalNavItems;
 
   const handleNav = (tab: NavTab) => {
     onSelectTab(tab);
@@ -83,42 +54,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-5 sm:p-6 border-b border-white/10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-lg shrink-0 ${
-              ageGroup === '3-6'
-                ? 'bg-gradient-to-br from-amber-400 via-pink-400 to-indigo-400 text-slate-950 font-black'
-                : ageGroup === '7-12'
-                ? 'bg-gradient-to-br from-blue-400 to-cyan-400 text-slate-950 font-bold'
-                : ageGroup === '13-17'
-                ? 'bg-gradient-to-br from-purple-400 to-indigo-500 text-white font-bold'
-                : 'bg-gradient-to-br from-indigo-400 to-teal-400 text-slate-900 font-bold'
-            }`}>
-              <span className="text-xl">{ageConfig.emoji}</span>
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-400 to-teal-400 flex items-center justify-center text-slate-900 font-bold shadow-lg shadow-indigo-500/20 shrink-0">
+              <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-sm sm:text-base font-semibold tracking-tight text-white leading-tight">
-                {ageConfig.title}
+              <h1 className="text-base font-semibold tracking-tight text-white leading-tight">
+                Sunviora
               </h1>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-3xs px-2 py-0.5 rounded-full font-bold bg-white/10 text-teal-300 border border-white/10">
-                  {ageConfig.badge}
-                </span>
-                {onChangeAgeGroup && (
-                  <button
-                    type="button"
-                    onClick={onChangeAgeGroup}
-                    className="text-3xs text-slate-400 hover:text-white underline cursor-pointer"
-                  >
-                    Change
-                  </button>
-                )}
-              </div>
+              <p className="text-3xs text-slate-400 font-light mt-0.5">
+                Mindful AI Journal
+              </p>
             </div>
           </div>
           {/* Mobile close button */}
           <button
             id="mobile-close-sidebar-btn"
             onClick={onCloseMobile}
-            className="md:hidden p-1.5 text-slate-400 hover:text-white rounded-lg"
+            className="md:hidden p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer"
             aria-label="Close navigation"
           >
             <X className="w-5 h-5" />
@@ -146,7 +98,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 Ask Gemini Q&A
               </span>
               <span className="text-[10px] text-slate-300 block truncate">
-                About your past entries
+                Ask questions about your journal
               </span>
             </div>
           </button>
@@ -186,15 +138,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Privacy Status Widget */}
       <div className="p-4">
         <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-2xl p-3.5">
-          <p className="text-[10px] uppercase tracking-widest text-indigo-400 font-bold mb-1">
-            Privacy & Family Safe
-          </p>
+          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-indigo-400 font-bold mb-1">
+            <Lock className="w-3 h-3 text-teal-400" />
+            <span>Private & Encrypted</span>
+          </div>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></div>
             <span className="text-xs text-slate-300 font-medium">Firestore UID Isolation</span>
           </div>
           <p className="text-[11px] text-slate-400 mt-1 leading-normal font-light">
-            All entries, photos, and drawings are isolated to your private account.
+            All entries, photos, and voice notes are isolated to your private account.
           </p>
         </div>
       </div>
@@ -204,7 +157,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500/40 to-teal-500/40 border border-white/20 text-indigo-200 flex items-center justify-center text-xs font-semibold shrink-0">
-              {user?.name ? user.name[0].toUpperCase() : 'U'}
+              {user?.name ? user.name[0].toUpperCase() : (user?.email ? user.email[0].toUpperCase() : 'U')}
             </div>
             <div className="min-w-0">
               <p className="text-xs font-medium text-slate-200 truncate">{user?.name || 'Journaler'}</p>
@@ -247,5 +200,3 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </>
   );
 };
-
-

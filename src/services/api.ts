@@ -29,7 +29,6 @@ import type {
   LanguageCode,
   MoodType,
   ReflectionData,
-  StoryItem,
   User,
   VoiceRecording,
 } from '../types';
@@ -233,13 +232,6 @@ export async function apiReflectDraft(params: {
   language?: LanguageCode;
   voiceTranscription?: string;
   images?: JournalImage[];
-  drawing?: string | null;
-  isKidsMode?: boolean;
-  ageGroup?: AgeGroup;
-  schoolReflection?: string;
-  personalGrowth?: string;
-  dailyQuestion?: string;
-  dailyQuestionAnswer?: string;
 }): Promise<{ reflection: ReflectionData }> {
   const token = await getAuthToken();
   const headers: Record<string, string> = {
@@ -264,13 +256,6 @@ export async function apiReflectDraft(params: {
       images: (params.images || []).map((img) => ({
         dataUrl: img.dataUrl,
       })),
-      drawing: params.drawing || undefined,
-      isKidsMode: Boolean(params.isKidsMode),
-      ageGroup: params.ageGroup,
-      schoolReflection: params.schoolReflection,
-      personalGrowth: params.personalGrowth,
-      dailyQuestion: params.dailyQuestion,
-      dailyQuestionAnswer: params.dailyQuestionAnswer,
     }),
   });
 
@@ -392,37 +377,6 @@ export async function apiGetStats(): Promise<DashboardStats> {
 // STORY CORNER API
 // ----------------------------------------------------
 
-export async function apiGenerateStory(params: {
-  ageGroup: AgeGroup;
-  genre?: string;
-  prompt?: string;
-  language?: LanguageCode;
-}): Promise<{ story: StoryItem }> {
-  const token = await getAuthToken();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-
-  const langOption = getLanguageOption(params.language || 'en');
-
-  const res = await fetch('/api/story', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      ageGroup: params.ageGroup,
-      genre: params.genre,
-      prompt: params.prompt,
-      language: params.language || 'en',
-      languageName: `${langOption.name} (${langOption.nativeName})`,
-    }),
-  });
-
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || 'Failed to generate story.');
-  }
-  return data;
-}
-
 // ----------------------------------------------------
 // ASK GEMINI ABOUT MY JOURNAL API
 // ----------------------------------------------------
@@ -431,7 +385,7 @@ export async function apiAskGemini(params: {
   question: string;
   entriesSummary: { title: string; content: string; mood: string; date: string }[];
   language?: LanguageCode;
-  ageGroup?: AgeGroup;
+  conversationHistory?: { sender: 'user' | 'gemini' | 'assistant'; text: string }[];
 }): Promise<{ answer: string; relatedThemes: string[] }> {
   const token = await getAuthToken();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -447,7 +401,7 @@ export async function apiAskGemini(params: {
       entriesSummary: params.entriesSummary,
       language: params.language || 'en',
       languageName: `${langOption.name} (${langOption.nativeName})`,
-      ageGroup: params.ageGroup || '18+',
+      conversationHistory: params.conversationHistory || [],
     }),
   });
 

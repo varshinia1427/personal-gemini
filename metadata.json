@@ -1,6 +1,6 @@
 {
   "name": "Sunviora",
-  "description": "Your thoughts. Your journal. Your AI reflection — privately. A private, secure multimodal AI journal with multilingual support and Kids Mode powered by Gemini.",
+  "description": "Your thoughts. Your journal. Your AI reflection — privately. A private, secure multimodal AI journal with multilingual reflections and Firebase authentication powered by Gemini.",
   "requestFramePermissions": ["microphone", "camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
